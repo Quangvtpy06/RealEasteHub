@@ -1,0 +1,7 @@
+.git
+.states
+.deps
+**/node_modules
+**/.env
+**/*.log
+backend/npm-debug.log*

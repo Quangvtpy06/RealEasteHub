@@ -1,0 +1,734 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Property Chain Dashboard</title>
+    <link rel="stylesheet" href="./styles.css?v=ledger-nav-visible-1" />
+  </head>
+  <body>
+    <div class="ambient" aria-hidden="true">
+      <div class="blob blob-primary"></div>
+      <div class="blob blob-secondary"></div>
+      <div class="blob blob-tertiary"></div>
+      <div class="grid-overlay"></div>
+      <div class="noise-overlay"></div>
+    </div>
+
+
+    <section id="authScreen" class="auth-screen">
+      <div class="auth-card spotlight">
+        <div class="auth-copy">
+          <p class="eyebrow">Property Chain</p>
+          <h1>Đăng nhập hệ thống xác thực sở hữu.</h1>
+          <p>Đăng nhập để quản lý hồ sơ sở hữu, tải ảnh tài sản, thực hiện giao dịch NFT và xác thực quyền sở hữu qua ví MetaMask.</p>
+        </div>
+
+        <div class="auth-panel">
+          <details class="setup-box advanced-box">
+            <summary>Cấu hình kết nối</summary>
+            <label>
+              Địa chỉ dịch vụ API
+              <input id="authApiBaseInput" type="url" spellcheck="false" />
+            </label>
+          </details>
+
+          <div class="wallet-login-copy">
+            <strong>Đăng nhập bằng ví Web3</strong>
+            <small>Hệ thống sẽ yêu cầu ký một thông điệp xác thực. Thao tác ký này không tốn gas và không gửi giao dịch lên blockchain.</small>
+          </div>
+
+          <button class="button primary" type="button" id="loginBtn">Kết nối MetaMask và đăng nhập</button>
+          <button class="button secondary" type="button" id="walletConnectLoginBtn">WalletConnect</button>
+
+          <details class="setup-box" id="setupBox" hidden>
+            <summary>Khởi tạo tài khoản quản trị đầu tiên</summary>
+            <form id="setupForm" class="auth-form">
+              <label>
+                Tên hiển thị
+                <input name="display_name" value="Project Admin" required />
+              </label>
+            </form>
+            <button class="button secondary" type="button" id="setupAdminBtn">Khởi tạo bằng ví hiện tại</button>
+          </details>
+        </div>
+      </div>
+    </section>
+
+    <div class="app-shell" id="appShell" hidden>
+      <header class="topbar">
+        <a class="brand" href="#top" aria-label="Property Chain Dashboard">
+          <span class="brand-mark">PC</span>
+          <span>
+            <strong>Property Chain</strong>
+          </span>
+        </a>
+
+        <nav class="nav-links" aria-label="Điều hướng chính">
+          <a href="#/home" data-nav-page="home">Tổng quan</a>
+          <a href="#/profile" data-nav-page="profile">Profile</a>
+          <a href="#/profiles" data-nav-page="profiles">Cá nhân</a>
+          <a href="#/properties" data-nav-page="properties">Bất động sản</a>
+          <a href="#/transfers" data-nav-page="transfers">Giao dịch</a>
+          <a href="#/ledger" data-nav-page="ledger">Sổ giao dịch</a>
+          <a href="#/verify" data-nav-page="verify">Xác thực</a>
+          <a href="#/system" data-nav-page="system" data-admin-only>Quản trị</a>
+        </nav>
+
+        <div class="topbar-search" role="search">
+          <span aria-hidden="true">⌕</span>
+          <input id="globalSearchInput" type="search" placeholder="Search NFT or User" autocomplete="off" spellcheck="false" />
+          <div id="searchResults" class="search-results" hidden></div>
+        </div>
+
+        <div class="topbar-actions">
+          <div class="session-pill" aria-label="Phiên đăng nhập">
+            <span id="sessionRole">Guest</span>
+            <strong id="sessionUser">Chưa đăng nhập</strong>
+          </div>
+          <button class="profile-avatar-button" type="button" id="profileDrawerBtn" aria-label="Mở profile">
+            <span id="topbarAvatarText">PC</span>
+          </button>
+          <button class="button secondary profile-link-button" type="button" id="viewProfileBtn">Hồ sơ</button>
+          <button class="button ghost" type="button" id="refreshAllBtn">Làm mới</button>
+          <button class="button ghost" type="button" id="logoutBtn">Đăng xuất</button>
+          <button class="button primary" type="button" id="connectWalletBtn">Kết nối ví</button>
+        </div>
+      </header>
+
+      <main id="top" class="dashboard">
+
+        <section class="profile-view route-page" data-page="profile" id="walletProfile">
+          <div class="profile-hero spotlight">
+            <div class="profile-avatar" id="profileAvatar">PC</div>
+            <div class="profile-heading">
+              <p class="eyebrow">Wallet Profile</p>
+              <h1 id="profileGreeting">Hi, wallet holder</h1>
+              <p id="profileWalletLine">Connect MetaMask to view your certificate portfolio.</p>
+            </div>
+            <div class="profile-actions">
+              <button class="button secondary" type="button" id="profileRefreshBtn">Làm mới profile</button>
+            </div>
+          </div>
+
+          <div class="profile-stat-grid">
+            <article class="profile-stat">
+              <span>Owned NFTs</span>
+              <strong id="profileOwnedCount">0</strong>
+              <small>Giấy chứng nhận NFT đang thuộc ví này</small>
+            </article>
+            <article class="profile-stat">
+              <span>Tokens</span>
+              <strong id="profileTokenCount">0</strong>
+              <small>Danh sách tokenId của certificate</small>
+            </article>
+            <article class="profile-stat">
+              <span>Recorded Value</span>
+              <strong id="profileTotalValue">0 ETH</strong>
+              <small>Tổng giá trị giao dịch đã ghi nhận</small>
+            </article>
+            <article class="profile-stat">
+              <span>History</span>
+              <strong id="profileHistoryCount">0</strong>
+              <small>Lượt mua/bán liên quan đến ví</small>
+            </article>
+          </div>
+
+          <div class="profile-tabs" aria-label="Wallet profile sections">
+            <button type="button" data-profile-target="profileTokens">Tokens</button>
+            <button type="button" data-profile-target="profileNfts">NFTs</button>
+            <button type="button" data-profile-target="profileHistory">History</button>
+          </div>
+
+          <section class="profile-section-block" id="profileNfts">
+            <div class="panel-heading compact-heading">
+              <div>
+                <p class="eyebrow">NFTs</p>
+                <h2>NFT giấy chứng nhận đang sở hữu</h2>
+              </div>
+            </div>
+            <div id="profileNftGrid" class="profile-nft-grid"></div>
+          </section>
+
+          <section class="profile-section-block" id="profileTokens">
+            <div class="panel-heading compact-heading">
+              <div>
+                <p class="eyebrow">Tokens</p>
+                <h2>Token certificate</h2>
+              </div>
+            </div>
+            <div id="profileTokenList" class="profile-token-list"></div>
+          </section>
+
+          <section class="profile-section-block" id="profileHistory">
+            <div class="panel-heading compact-heading">
+              <div>
+                <p class="eyebrow">History</p>
+                <h2>Lịch sử giao dịch của ví</h2>
+              </div>
+            </div>
+            <div id="profileHistoryList" class="profile-history-list"></div>
+          </section>
+        </section>
+
+        <section class="hero-panel spotlight route-page" data-page="home">
+          <div>
+            <p class="eyebrow">Dashboard demo</p>
+            <h1>Quản lý chứng nhận sở hữu bất động sản bằng NFT.</h1>
+          </div>
+          <div class="status-strip" aria-label="Trạng thái hệ thống">
+            <div>
+              <span id="backendDot" class="dot idle"></span>
+              <small>Dịch vụ API</small>
+              <strong id="backendStatus">Chưa kiểm tra</strong>
+            </div>
+            <div>
+              <span id="chainDot" class="dot idle"></span>
+              <small>Blockchain</small>
+              <strong id="chainStatus">Chưa kiểm tra</strong>
+            </div>
+            <div>
+              <span id="walletDot" class="dot idle"></span>
+              <small>MetaMask</small>
+              <strong id="walletStatus">Chưa kết nối</strong>
+            </div>
+          </div>
+        </section>
+
+        <section class="metrics-grid route-page" data-page="home">
+          <article class="metric-card spotlight">
+            <span>Hồ sơ</span>
+            <strong id="profileCount">0</strong>
+            <small>Hồ sơ cá nhân đã ghi nhận</small>
+          </article>
+          <article class="metric-card spotlight">
+            <span>Tài sản</span>
+            <strong id="propertyCount">0</strong>
+            <small>Tài sản đã tạo hồ sơ</small>
+          </article>
+          <article class="metric-card spotlight">
+            <span>Giao dịch</span>
+            <strong id="transferCount">0</strong>
+            <small>Hồ sơ chuyển nhượng</small>
+          </article>
+          <article class="metric-card spotlight">
+            <span>Account</span>
+            <strong id="accountShort">--</strong>
+            <small id="networkLabel">Chưa có network</small>
+          </article>
+        </section>
+
+
+        <section class="panel spotlight route-page home-market-section" data-page="home" id="homeNftMarket">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">Marketplace view</p>
+              <h2>NFT giấy chứng nhận đang có</h2>
+            </div>
+            <button class="button secondary" type="button" id="refreshNftMarketBtn">Tải NFT</button>
+          </div>
+          <div id="homeNftGrid" class="market-nft-grid"></div>
+        </section>
+
+        <section class="workspace-grid">
+          <div class="main-column">
+            <section class="panel spotlight route-page" data-page="home" id="overview">
+              <div class="panel-heading">
+                <div>
+                  <p class="eyebrow">Overview</p>
+                  <h2>Luồng demo nhanh</h2>
+                </div>
+                <span class="badge">User view mặc định</span>
+              </div>
+
+              <div class="overview-grid">
+                <article>
+                  <strong>1. Cá nhân</strong>
+                  <small>Tạo hồ sơ người sở hữu hoặc người mua, kết nối ví MetaMask với hồ sơ.</small>
+                </article>
+                <article>
+                  <strong>2. Bất động sản</strong>
+                  <small>Tạo hồ sơ tài sản trong hệ thống, sau đó quản trị viên mint NFT giấy chứng nhận.</small>
+                </article>
+                <article>
+                  <strong>3. Giao dịch</strong>
+                  <small>Seller tạo sale, approve NFT và deposit vào escrow để hệ thống giữ trung gian.</small>
+                </article>
+                <article>
+                  <strong>4. Xác thực</strong>
+                  <small>Kiểm tra owner NFT và verifyOwnership để chứng minh quyền sở hữu.</small>
+                </article>
+              </div>
+            </section>
+
+            <section class="panel spotlight route-page" data-page="system" id="system" data-admin-only>
+              <div class="panel-heading">
+                <div>
+                  <p class="eyebrow">Quản trị</p>
+                  <h2>Kết nối & tài khoản</h2>
+                </div>
+                <button class="button secondary" type="button" id="checkSystemBtn">Kiểm tra</button>
+              </div>
+
+              <div class="form-grid two">
+                <label>
+                  Địa chỉ dịch vụ API
+                  <input id="apiBaseInput" type="url" spellcheck="false" />
+                </label>
+                <label>
+                  Ví hiện tại
+                  <input id="walletAddressInput" type="text" readonly placeholder="Bấm kết nối ví" />
+                </label>
+              </div>
+
+              <div class="contract-grid" aria-label="Contract address">
+                <div>
+                  <small>NFT</small>
+                  <code id="nftAddress">--</code>
+                </div>
+                <div>
+                  <small>Registry</small>
+                  <code id="registryAddress">--</code>
+                </div>
+                <div>
+                  <small>Escrow</small>
+                  <code id="escrowAddress">--</code>
+                </div>
+              </div>
+
+
+              <div class="divider"></div>
+
+              <div class="panel-heading compact-heading">
+                <div>
+                  <p class="eyebrow">Tài khoản</p>
+                  <h2>Tài khoản hệ thống</h2>
+                </div>
+                <button class="button secondary" type="button" id="loadUsersBtn">Tải tài khoản</button>
+              </div>
+
+              <form id="userAccountForm" class="form-grid two">
+                <label>
+                  Username
+                  <input name="username" value="user01" required />
+                </label>
+                <label>
+                  Tên hiển thị
+                  <input name="display_name" value="Normal User" required />
+                </label>
+                <label>
+                  Ví đăng nhập
+                  <input name="wallet_address" placeholder="0x..." required />
+                </label>
+                <label>
+                  Vai trò
+                  <select name="role">
+                    <option value="user">user</option>
+                    <option value="admin">admin</option>
+                  </select>
+                </label>
+                <label class="wide">
+                  Profile ID liên kết, có thể để trống
+                  <input name="profile_id" inputmode="numeric" placeholder="VD: 2" />
+                </label>
+              </form>
+
+              <div class="button-row">
+                <button class="button primary" type="button" id="createUserBtn">Tạo tài khoản</button>
+              </div>
+
+              <div id="userList" class="data-list compact-list"></div>
+            </section>
+
+            <section class="panel spotlight route-page" data-page="profiles" id="profiles">
+              <div class="panel-heading">
+                <div>
+                  <p class="eyebrow">Step 1</p>
+                  <h2>Hồ sơ cá nhân</h2>
+                </div>
+                <button class="button secondary" type="button" data-fill-wallet="profileWallet">Lấy ví</button>
+              </div>
+
+              <form id="profileForm" class="form-grid two">
+                <label>
+                  Mã hồ sơ cá nhân
+                  <input name="backend_person_id" value="PERSON-A" required />
+                </label>
+                <label>
+                  Mã kiểm chứng hồ sơ
+                  <input name="backend_person_hash" value="PERSON-A-HASH" required />
+                </label>
+                <label>
+                  Địa chỉ ví
+                  <input id="profileWallet" name="wallet_address" placeholder="0x..." required />
+                </label>
+                <label>
+                  Họ tên
+                  <input name="full_name" value="Nguyen Van A" required />
+                </label>
+                <label>
+                  Quốc tịch
+                  <input name="country" value="Viet Nam" required />
+                </label>
+                <label>
+                  CCCD
+                  <input name="identify_id" value="123456789001" inputmode="numeric" required />
+                </label>
+                <label>
+                  Email
+                  <input name="email" value="a@example.com" type="email" />
+                </label>
+                <label>
+                  Số điện thoại
+                  <input name="phone" value="0900000001" required />
+                </label>
+                <label class="wide">
+                  Mã dữ liệu hồ sơ
+                  <input name="profile_data_hash" value="PROFILE-A-DATA" required />
+                </label>
+                <label class="checkbox-row">
+                  <input name="verified" type="checkbox" checked />
+                  Xác thực ngay trên smart contract
+                </label>
+              </form>
+
+              <div class="button-row">
+                <button class="button primary" type="button" id="createProfileBtn">Lưu hồ sơ</button>
+                <button class="button secondary" type="button" id="registerPersonChainBtn" data-admin-only>Ghi person on-chain</button>
+              </div>
+            </section>
+
+            <section class="panel spotlight route-page" data-page="properties" id="properties">
+              <div class="panel-heading">
+                <div>
+                  <p class="eyebrow">Step 2</p>
+                  <h2>Bất động sản và NFT</h2>
+                </div>
+                <button class="button secondary" type="button" id="loadDataBtn">Tải dữ liệu</button>
+              </div>
+
+              <form id="propertyForm" class="form-grid two">
+                <label>
+                  Mã hồ sơ tài sản
+                  <input name="backend_property_id" value="PROPERTY-001" required />
+                </label>
+                <label>
+                  Mã kiểm chứng tài sản
+                  <input name="backend_property_hash" value="PROPERTY-001-HASH" required />
+                </label>
+                <label>
+                  ID hồ sơ chủ sở hữu
+                  <input name="owner_profile_id" value="1" inputmode="numeric" required />
+                </label>
+                <label>
+                  Certificate URI
+                  <input name="certificate_uri" value="demo://certificate-property-001" required />
+                </label>
+                <label class="wide">
+                  Địa chỉ tài sản
+                  <input name="location" value="So 1 Nguyen Hue, Quan 1, TP.HCM" required />
+                </label>
+                <label>
+                  Mã dữ liệu tài sản
+                  <input name="property_data_hash" value="PROPERTY-001-DATA" required />
+                </label>
+                <label>
+                  Legal document hash
+                  <input name="legal_document_hash" value="LEGAL-DOC-001" required />
+                </label>
+              </form>
+
+              <div class="button-row">
+                <button class="button primary" type="button" id="createPropertyBtn">Lưu tài sản</button>
+                <button class="button secondary" type="button" id="registerPropertyChainBtn" data-admin-only>Mint NFT on-chain</button>
+              </div>
+
+              <div class="divider"></div>
+
+              <form id="propertyChainForm" class="form-grid three compact">
+                <label>
+                  ID hồ sơ tài sản
+                  <input name="property_db_id" value="1" inputmode="numeric" />
+                </label>
+                <label>
+                  SC propertyId
+                  <input name="sc_property_id" value="1" inputmode="numeric" />
+                </label>
+                <label>
+                  tokenId NFT
+                  <input name="certificate_token_id" value="1" inputmode="numeric" />
+                </label>
+                <label class="wide">
+                  Tx hash register
+                  <input name="registry_tx_hash" placeholder="0x..." />
+                </label>
+              </form>
+
+              <div class="button-row">
+                <button class="button secondary" type="button" id="patchPropertyChainBtn" data-admin-only>Cập nhật mã on-chain</button>
+              </div>
+
+              <div class="divider"></div>
+
+              <div class="panel-heading compact-heading">
+                <div>
+                  <p class="eyebrow">IPFS</p>
+                  <h2>Ảnh tài sản và metadata NFT</h2>
+                </div>
+                <button class="button secondary" type="button" id="loadPropertyImagesBtn">Tải ảnh</button>
+              </div>
+
+              <form id="ipfsForm" class="form-grid two" enctype="multipart/form-data">
+                <label>
+                  ID hồ sơ tài sản
+                  <input name="property_id" value="1" inputmode="numeric" required />
+                </label>
+                <label>
+                  Thứ tự ảnh
+                  <input name="sort_order" value="0" inputmode="numeric" />
+                </label>
+                <label class="wide">
+                  Chọn ảnh nhà/đất/chung cư
+                  <input name="image" type="file" accept="image/*" />
+                </label>
+                <label class="wide">
+                  Chú thích ảnh
+                  <input name="caption" value="Ảnh mặt tiền tài sản" />
+                </label>
+                <label>
+                  Tên NFT metadata
+                  <input name="metadata_name" value="Property Certificate #1" />
+                </label>
+                <label>
+                  Mô tả NFT metadata
+                  <input name="metadata_description" value="NFT đại diện giấy chứng nhận quyền sở hữu bất động sản." />
+                </label>
+              </form>
+
+              <div class="button-row wrap">
+                <button class="button secondary" type="button" id="checkIpfsBtn">Kiểm tra IPFS</button>
+                <button class="button primary" type="button" id="uploadPropertyImageBtn">Upload ảnh IPFS</button>
+                <button class="button secondary" type="button" id="createMetadataBtn">Tạo metadata NFT</button>
+              </div>
+
+              <div id="propertyImageList" class="image-grid"></div>
+
+            </section>
+
+            <section class="panel spotlight route-page" data-page="transfers" id="transfers">
+              <div class="panel-heading">
+                <div>
+                  <p class="eyebrow">Step 3</p>
+                  <h2>Chuyển nhượng NFT</h2>
+                </div>
+                <span class="badge">Seller dùng ví MetaMask</span>
+              </div>
+
+              <form id="transferForm" class="form-grid three">
+                <label>
+                  ID hồ sơ tài sản
+                  <input name="property_id" value="1" inputmode="numeric" required />
+                </label>
+                <label>
+                  SC propertyId
+                  <input name="sc_property_id" value="1" inputmode="numeric" required />
+                </label>
+                <label>
+                  tokenId NFT
+                  <input name="certificate_token_id" value="1" inputmode="numeric" required />
+                </label>
+                <label>
+                  ID hồ sơ người mua
+                  <input name="buyer_profile_id" value="2" inputmode="numeric" required />
+                </label>
+                <label>
+                  Ví buyer
+                  <input name="buyer_wallet_address" placeholder="0x..." required />
+                </label>
+                <label>
+                  Giá Wei
+                  <input name="price_wei" value="1000000000000000000" inputmode="numeric" required />
+                </label>
+                <label>
+                  Mã giao dịch
+                  <input name="backend_transaction_id" value="TRANSFER-001" required />
+                </label>
+                <label>
+                  Mã kiểm chứng giao dịch
+                  <input name="backend_transaction_hash" value="TRANSFER-001-HASH" required />
+                </label>
+                <label>
+                  Document hash
+                  <input name="document_hash" value="TRANSFER-DOC-001" required />
+                </label>
+              </form>
+
+              <div class="button-row wrap">
+                <button class="button primary" type="button" id="createTransferBtn">Tạo hồ sơ giao dịch</button>
+                <button class="button secondary" type="button" id="createSaleChainBtn">Tạo sale on-chain</button>
+                <button class="button secondary" type="button" id="approveNftBtn">Approve NFT</button>
+                <button class="button secondary" type="button" id="depositNftBtn">Deposit NFT</button>
+              </div>
+
+              <div class="divider"></div>
+
+              <form id="releaseForm" class="form-grid three compact">
+                <label>
+                  ID hồ sơ giao dịch
+                  <input name="transfer_db_id" value="1" inputmode="numeric" />
+                </label>
+                <label>
+                  saleId on-chain
+                  <input name="sale_id" value="1" inputmode="numeric" />
+                </label>
+                <label>
+                  Tx hash
+                  <input name="tx_hash" placeholder="0x..." />
+                </label>
+              </form>
+
+              <div class="button-row wrap">
+                <button class="button secondary" type="button" id="markDepositSqlBtn" data-admin-only>Đánh dấu đã ký gửi</button>
+                <button class="button primary" type="button" id="releaseBackendBtn" data-admin-only>Xác nhận chuyển nhượng</button>
+              </div>
+            </section>
+
+            <section class="panel spotlight route-page" data-page="ledger" id="ledger">
+              <div class="panel-heading">
+                <div>
+                  <p class="eyebrow">Ledger</p>
+                  <h2>Sổ giao dịch và sở hữu NFT</h2>
+                </div>
+                <button class="button secondary" type="button" id="loadLedgerBtn">Tải sổ</button>
+              </div>
+
+              <div class="ledger-grid">
+                <section class="ledger-column" aria-label="Lịch sử chuyển nhượng">
+                  <div class="ledger-column-heading">
+                    <strong>Lịch sử chuyển nhượng</strong>
+                    <small>Theo dõi seller, buyer, trạng thái và tx hash của từng hồ sơ giao dịch.</small>
+                  </div>
+                  <div id="ledgerTransferList" class="data-list ledger-list"></div>
+                </section>
+
+                <section class="ledger-column" aria-label="Danh sách sở hữu NFT">
+                  <div class="ledger-column-heading">
+                    <strong>Danh sách sở hữu NFT</strong>
+                    <small>Mỗi dòng là một NFT giấy chứng nhận và chủ sở hữu hiện tại.</small>
+                  </div>
+                  <div id="ledgerOwnershipList" class="data-list ledger-list"></div>
+                </section>
+              </div>
+            </section>
+
+            <section class="panel spotlight route-page" data-page="verify" id="verify">
+              <div class="panel-heading">
+                <div>
+                  <p class="eyebrow">Step 4</p>
+                  <h2>Xác thực sở hữu</h2>
+                </div>
+                <button class="button secondary" type="button" data-fill-wallet="verifyWallet">Lấy ví</button>
+              </div>
+
+              <form id="verifyForm" class="form-grid three compact">
+                <label>
+                  SC propertyId
+                  <input name="property_id" value="1" inputmode="numeric" />
+                </label>
+                <label>
+                  tokenId NFT
+                  <input name="token_id" value="1" inputmode="numeric" />
+                </label>
+                <label>
+                  Ví cần kiểm tra
+                  <input id="verifyWallet" name="account" placeholder="0x..." />
+                </label>
+              </form>
+
+              <div class="button-row">
+                <button class="button primary" type="button" id="verifyOwnershipBtn">verifyOwnership</button>
+                <button class="button secondary" type="button" id="checkNftBtn">ownerOf/tokenURI</button>
+              </div>
+            </section>
+          </div>
+
+          <aside class="side-column">
+            <section class="panel spotlight sticky-panel">
+              <div class="panel-heading">
+                <div>
+                  <p class="eyebrow">Runtime</p>
+                  <h2>Log thao tác</h2>
+                </div>
+                <button class="icon-button" type="button" id="clearLogBtn" aria-label="Xóa log">Clear</button>
+              </div>
+              <ol id="activityLog" class="activity-log"></ol>
+            </section>
+
+            <section class="panel spotlight">
+              <div class="panel-heading">
+                <div>
+                  <p class="eyebrow">Dữ liệu</p>
+                  <h2>Dữ liệu gần đây</h2>
+                </div>
+              </div>
+              <div class="tabs" role="tablist" aria-label="Bảng dữ liệu">
+                <button class="tab active" type="button" data-table="profiles">Hồ sơ</button>
+                <button class="tab" type="button" data-table="properties">Tài sản</button>
+                <button class="tab" type="button" data-table="transfers">Giao dịch</button>
+              </div>
+              <div id="dataList" class="data-list"></div>
+            </section>
+          </aside>
+        </section>
+      </main>
+    </div>
+
+
+    <div id="profileDrawerBackdrop" class="drawer-backdrop" hidden></div>
+    <aside id="profileDrawer" class="profile-drawer" hidden aria-label="Wallet profile drawer">
+      <div class="drawer-cover">
+        <button class="icon-button drawer-close" type="button" id="profileDrawerCloseBtn" aria-label="Đóng profile">×</button>
+        <div class="drawer-identity">
+          <div class="profile-avatar drawer-avatar" id="drawerAvatar">PC</div>
+          <div>
+            <strong id="drawerTitle">Hi, wallet</strong>
+            <small id="drawerWallet">--</small>
+          </div>
+        </div>
+        <div class="drawer-stats">
+          <div>
+            <span>Owned</span>
+            <strong id="drawerOwnedCount">0</strong>
+          </div>
+          <div>
+            <span>Total Value</span>
+            <strong id="drawerTotalValue">0 ETH</strong>
+          </div>
+        </div>
+      </div>
+
+      <div class="drawer-tabs">
+        <button type="button" data-drawer-tab="drawerNfts">NFTs</button>
+        <button type="button" data-drawer-tab="drawerTokens">Tokens</button>
+        <button type="button" data-drawer-tab="drawerHistory">History</button>
+      </div>
+
+      <div class="drawer-content">
+        <section id="drawerNfts" class="drawer-pane">
+          <div id="drawerNftList" class="drawer-list"></div>
+        </section>
+        <section id="drawerTokens" class="drawer-pane">
+          <div id="drawerTokenList" class="drawer-list"></div>
+        </section>
+        <section id="drawerHistory" class="drawer-pane">
+          <div id="drawerHistoryList" class="drawer-list"></div>
+        </section>
+      </div>
+    </aside>
+
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+    <script src="./vendor/ethers.umd.min.js"></script>
+    <script src="./app.js?v=ledger-nav-visible-1"></script>
+  </body>
+</html>

@@ -1,0 +1,84 @@
+{
+	"compiler": {
+		"version": "0.8.30+commit.73712a01"
+	},
+	"language": "Solidity",
+	"output": {
+		"abi": [
+			{
+				"inputs": [
+					{
+						"internalType": "address",
+						"name": "operator",
+						"type": "address"
+					},
+					{
+						"internalType": "address",
+						"name": "from",
+						"type": "address"
+					},
+					{
+						"internalType": "uint256",
+						"name": "tokenID",
+						"type": "uint256"
+					},
+					{
+						"internalType": "bytes",
+						"name": "data",
+						"type": "bytes"
+					}
+				],
+				"name": "onERC721Received",
+				"outputs": [
+					{
+						"internalType": "bytes4",
+						"name": "",
+						"type": "bytes4"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			}
+		],
+		"devdoc": {
+			"kind": "dev",
+			"methods": {
+				"onERC721Received(address,address,uint256,bytes)": {
+					"details": "Xác nhận việc nhận NFT. Hàm này phải trả về đúng selector  `bytes4(keccak256(\"onERC721Received(address,address,uint256,bytes)\"))`"
+				}
+			},
+			"version": 1
+		},
+		"userdoc": {
+			"kind": "user",
+			"methods": {},
+			"version": 1
+		}
+	},
+	"settings": {
+		"compilationTarget": {
+			"PropertyCertificateRegistry.sol": "IERC721Received"
+		},
+		"evmVersion": "prague",
+		"libraries": {},
+		"metadata": {
+			"bytecodeHash": "ipfs"
+		},
+		"optimizer": {
+			"enabled": false,
+			"runs": 200
+		},
+		"remappings": []
+	},
+	"sources": {
+		"PropertyCertificateRegistry.sol": {
+			"keccak256": "0xa4e6647822e00291303e15876f89e6ad3e1e0e648bd1e858fea3555de70a0ccd",
+			"license": "MIT",
+			"urls": [
+				"bzz-raw://36a396253fed0fb1a104c7ffd36720243f4a0bb3c23dd03c4982bced42de2313",
+				"dweb:/ipfs/QmW4R8aCSYftWtDFSZJHTKNCYwax4YseLZMxML1a8iwzhS"
+			]
+		}
+	},
+	"version": 1
+}
