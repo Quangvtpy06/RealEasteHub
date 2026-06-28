@@ -731,6 +731,25 @@
 						"type": "address"
 					}
 				],
+				"name": "isRegisteredWallet",
+				"outputs": [
+					{
+						"internalType": "bool",
+						"name": "",
+						"type": "bool"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "address",
+						"name": "wallet",
+						"type": "address"
+					}
+				],
 				"name": "isVerifiedWallet",
 				"outputs": [
 					{
@@ -1304,11 +1323,11 @@
 			]
 		},
 		"contracts/PropertyRegistry.sol": {
-			"keccak256": "0xdc4d17798388d80e79beed06348c3c6f996d64e9f60a0ce75aeb68c3a7e4b45f",
+			"keccak256": "0x6fb0dda89aeb7c7a501ce25824c66df03dab1abd9ffcc18e8078ae816d7c3df7",
 			"license": "MIT",
 			"urls": [
-				"bzz-raw://93ec91aea3c3404bf4af25d9f832a43ff9c999457bacc85885d74ab966afb125",
-				"dweb:/ipfs/QmYMdwumiz6z4mDXh9GUEmgrEYffiiR28oarpu4eHsSVLb"
+				"bzz-raw://bf6db3d31b54be95f1be07900597dc3a3dee2db16b0b99fa852dffe56677efb4",
+				"dweb:/ipfs/QmYwbuFTRsDhCj8FZEsXiceiGeQ6oYW9d696wjM9oUwjc2"
 			]
 		}
 	},

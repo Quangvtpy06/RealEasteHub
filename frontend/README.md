@@ -51,8 +51,8 @@ Frontend dùng hash route, ví dụ:
 
 Mặc định giao diện chạy ở quyền user và không hiển thị khu vực quản trị.
 
-- User: xem/tạo dữ liệu cơ bản, kết nối ví, thao tác seller như approve/deposit.
-- Admin: hiện thêm khu vực quản trị, được register on-chain qua dịch vụ API, cập nhật mã on-chain và xác nhận chuyển nhượng.
+- User: tạo hồ sơ, tự ghi person on-chain, tạo tài sản, upload metadata IPFS, mint NFT vào ví của mình, ký bán, approve/deposit NFT vào escrow và trả phí 0.01%.
+- Admin: hiện thêm khu vực quản trị, cấu hình hệ thống, cấp role contract và vẫn có thể hỗ trợ các thao tác quản trị cần thiết.
 
 Lưu ý: frontend chỉ là lớp hiển thị. Backend vẫn dùng JWT và role để chặn API quản trị.
 
@@ -74,12 +74,14 @@ Không dùng `localhost:3000` trên máy user, vì `localhost` là chính máy u
 
 Frontend đăng nhập bằng chữ ký ví MetaMask. Backend verify chữ ký rồi cấp JWT nội bộ để phân quyền API:
 
-- `admin`: thấy khu vực quản trị, được gọi các API quản trị như register on-chain, release, cập nhật mã on-chain.
-- `user`: không thấy khu vực quản trị, không gọi được API admin, vẫn có thể xem dữ liệu và ký thao tác bằng MetaMask nếu smart contract cho phép.
+- `admin`: thấy khu vực quản trị và được gọi các API quản trị như cấu hình contract/cấp role.
+- `user`: không thấy khu vực quản trị, nhưng có thể tự tạo tài sản, mint NFT, ký bán và thao tác escrow bằng MetaMask.
 
 Lần đầu chạy hệ thống, phần **Khởi tạo tài khoản quản trị đầu tiên** chỉ hiện khi backend chưa có admin và sẽ yêu cầu ký bằng ví MetaMask.
 
-Tài khoản user nên được admin tạo qua API `POST /api/auth/users` hoặc có thể bổ sung màn hình quản lý user sau.
+Sau khi có ví admin đầu tiên, các ví khác đăng nhập thành công sẽ tự được backend tạo tài khoản nội bộ với quyền `user`.
+
+Lưu ý: flow user tự mint và phí escrow 0.01% yêu cầu deploy lại `PropertyRegistry` và `PropertyTransactionEscrow` sau khi cập nhật contract.
 
 ## Mở link cho máy khác trong cùng mạng
 

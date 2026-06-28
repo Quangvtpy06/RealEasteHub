@@ -14,9 +14,10 @@ CREATE TABLE IF NOT EXISTS profiles (
   identify_id NUMERIC(78,0) NOT NULL CHECK (identify_id>0),
   email TEXT NOT NULL DEFAULT '',
   phone TEXT NOT NULL CHECK (BTRIM(phone) <> ''),
+  address TEXT NOT NULL DEFAULT '',
   profile_data_hash TEXT NOT NULL,
   --xác thực thông tin
-  verified BOOLEAN NOT NULL DEFAULT FALSE,
+  verified BOOLEAN NOT NULL DEFAULT TRUE,
   registry_tx_hash TEXT,
   --ngày tạo, ngày đóng
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -36,6 +37,9 @@ CREATE TABLE IF NOT EXISTS app_users (
   role TEXT NOT NULL CHECK (role IN ('admin', 'user')),
   profile_id BIGINT REFERENCES profiles(id),
   active BOOLEAN NOT NULL DEFAULT TRUE,
+  suspension_reason TEXT,
+  suspended_at TIMESTAMPTZ,
+  suspended_by_user_id BIGINT REFERENCES app_users(id),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -63,8 +67,23 @@ CREATE TABLE IF NOT EXISTS property (
   location TEXT NOT NULL CHECK (BTRIM(location) <> ''),
   property_data_hash TEXT NOT NULL,
   legal_document_hash TEXT NOT NULL,
+  area_m2 NUMERIC(18, 2) NOT NULL DEFAULT 0,
+  rooms NUMERIC(18, 0) NOT NULL DEFAULT 0,
+  valuation_report_hash TEXT DEFAULT '',
+  valuation_report_uri TEXT DEFAULT '',
   certificate_uri TEXT NOT NULL CHECK (BTRIM(certificate_uri) <> ''),
+  asking_price_wei NUMERIC(78, 0) NOT NULL DEFAULT 0,
+  listing_status TEXT NOT NULL DEFAULT 'unlisted'
+    CHECK (listing_status IN ('unlisted', 'listed', 'sold', 'cancelled')),
+  listing_sale_id NUMERIC(78, 0),
+  listing_tx_hash TEXT,
+  listed_at TIMESTAMPTZ,
+  sold_at TIMESTAMPTZ,
   active BOOLEAN NOT NULL DEFAULT TRUE,
+  risk_status TEXT NOT NULL DEFAULT 'clear',
+  risk_reason TEXT,
+  risk_flagged_at TIMESTAMPTZ,
+  risk_flagged_by_user_id BIGINT REFERENCES app_users(id),
   registry_tx_hash TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -76,12 +95,18 @@ CREATE INDEX IF NOT EXISTS idx_property_owner_profile ON property(owner_profile_
 CREATE INDEX IF NOT EXISTS idx_property_owner_wallet ON property(LOWER(owner_wallet_address)); 
 	--dùng hàm lower để đưa address về dạng chữ thường
 
+CREATE INDEX IF NOT EXISTS idx_property_listing_status
+	ON property(listing_status, updated_at DESC);
+
 CREATE INDEX IF NOT EXISTS idx_property_smartcontract_id --propertyid trong sc
 	ON property(sc_property_id);
 
 CREATE INDEX IF NOT EXISTS idx_property_certificate_token ON property(certificate_token_id);
 
 CREATE INDEX IF NOT EXISTS idx_property_active_updated ON property(active, updated_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_property_risk_status
+  ON property(risk_status, active, updated_at DESC);
 
 CREATE TABLE IF NOT EXISTS property_images (
   id BIGSERIAL PRIMARY KEY,
@@ -122,6 +147,10 @@ CREATE TABLE IF NOT EXISTS transfer_contract (
   buyer_wallet_address TEXT NOT NULL,
   price_wei NUMERIC(78, 0) NOT NULL DEFAULT 0,
   document_hash TEXT NOT NULL,
+  seller_acceptance_message TEXT,
+  seller_signature TEXT,
+  seller_signed_at TIMESTAMPTZ,
+  fee_wei NUMERIC(78, 0),
   /*tạo trạng thái giao dịch theo 4 giai đoạn: 
   tạo giao dịch - gửi vào hệ thống kiểm tra - xác nhận hợp lệ và chuyển đi - hủy bỏ giao dịch*/
   status TEXT NOT NULL DEFAULT 'created' CHECK (status IN ('created', 'deposited', 'released', 'cancelled')),

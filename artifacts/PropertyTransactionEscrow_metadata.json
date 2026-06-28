@@ -72,9 +72,107 @@
 						"internalType": "address",
 						"name": "seller",
 						"type": "address"
+					},
+					{
+						"indexed": false,
+						"internalType": "uint256",
+						"name": "feeWei",
+						"type": "uint256"
 					}
 				],
 				"name": "CertificateDeposited",
+				"type": "event"
+			},
+			{
+				"anonymous": false,
+				"inputs": [
+					{
+						"indexed": true,
+						"internalType": "uint256",
+						"name": "saleId",
+						"type": "uint256"
+					},
+					{
+						"indexed": true,
+						"internalType": "uint256",
+						"name": "propertyId",
+						"type": "uint256"
+					},
+					{
+						"indexed": true,
+						"internalType": "uint256",
+						"name": "certificateTokenId",
+						"type": "uint256"
+					},
+					{
+						"indexed": false,
+						"internalType": "address",
+						"name": "seller",
+						"type": "address"
+					},
+					{
+						"indexed": false,
+						"internalType": "uint256",
+						"name": "priceWei",
+						"type": "uint256"
+					}
+				],
+				"name": "CertificateListed",
+				"type": "event"
+			},
+			{
+				"anonymous": false,
+				"inputs": [
+					{
+						"indexed": true,
+						"internalType": "uint256",
+						"name": "saleId",
+						"type": "uint256"
+					},
+					{
+						"indexed": true,
+						"internalType": "uint256",
+						"name": "propertyId",
+						"type": "uint256"
+					},
+					{
+						"indexed": true,
+						"internalType": "uint256",
+						"name": "certificateTokenId",
+						"type": "uint256"
+					},
+					{
+						"indexed": false,
+						"internalType": "address",
+						"name": "seller",
+						"type": "address"
+					},
+					{
+						"indexed": false,
+						"internalType": "address",
+						"name": "buyer",
+						"type": "address"
+					},
+					{
+						"indexed": false,
+						"internalType": "uint256",
+						"name": "priceWei",
+						"type": "uint256"
+					},
+					{
+						"indexed": false,
+						"internalType": "uint256",
+						"name": "feeWei",
+						"type": "uint256"
+					},
+					{
+						"indexed": false,
+						"internalType": "uint256",
+						"name": "sellerProceedsWei",
+						"type": "uint256"
+					}
+				],
+				"name": "CertificatePurchased",
 				"type": "event"
 			},
 			{
@@ -247,12 +345,38 @@
 			},
 			{
 				"inputs": [],
+				"name": "BPS_DENOMINATOR",
+				"outputs": [
+					{
+						"internalType": "uint256",
+						"name": "",
+						"type": "uint256"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [],
 				"name": "DEFAULT_ADMIN_ROLE",
 				"outputs": [
 					{
 						"internalType": "bytes32",
 						"name": "",
 						"type": "bytes32"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [],
+				"name": "FEE_BPS",
+				"outputs": [
+					{
+						"internalType": "uint256",
+						"name": "",
+						"type": "uint256"
 					}
 				],
 				"stateMutability": "view",
@@ -288,6 +412,19 @@
 					}
 				],
 				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "uint256",
+						"name": "saleId",
+						"type": "uint256"
+					}
+				],
+				"name": "buyCertificate",
+				"outputs": [],
+				"stateMutability": "payable",
 				"type": "function"
 			},
 			{
@@ -365,7 +502,20 @@
 				],
 				"name": "depositCertificate",
 				"outputs": [],
-				"stateMutability": "nonpayable",
+				"stateMutability": "payable",
+				"type": "function"
+			},
+			{
+				"inputs": [],
+				"name": "feeRecipient",
+				"outputs": [
+					{
+						"internalType": "address payable",
+						"name": "",
+						"type": "address"
+					}
+				],
+				"stateMutability": "view",
 				"type": "function"
 			},
 			{
@@ -500,6 +650,44 @@
 			{
 				"inputs": [
 					{
+						"internalType": "uint256",
+						"name": "priceWei",
+						"type": "uint256"
+					}
+				],
+				"name": "getTotalPrice",
+				"outputs": [
+					{
+						"internalType": "uint256",
+						"name": "",
+						"type": "uint256"
+					}
+				],
+				"stateMutability": "pure",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "uint256",
+						"name": "priceWei",
+						"type": "uint256"
+					}
+				],
+				"name": "getTransactionFee",
+				"outputs": [
+					{
+						"internalType": "uint256",
+						"name": "",
+						"type": "uint256"
+					}
+				],
+				"stateMutability": "pure",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
 						"internalType": "bytes32",
 						"name": "role",
 						"type": "bytes32"
@@ -540,6 +728,40 @@
 				"type": "function"
 			},
 			{
+				"inputs": [
+					{
+						"internalType": "uint256",
+						"name": "propertyId",
+						"type": "uint256"
+					},
+					{
+						"internalType": "uint256",
+						"name": "priceWei",
+						"type": "uint256"
+					},
+					{
+						"internalType": "bytes32",
+						"name": "backendTransactionId",
+						"type": "bytes32"
+					},
+					{
+						"internalType": "bytes32",
+						"name": "documentHash",
+						"type": "bytes32"
+					}
+				],
+				"name": "listCertificate",
+				"outputs": [
+					{
+						"internalType": "uint256",
+						"name": "saleId",
+						"type": "uint256"
+					}
+				],
+				"stateMutability": "nonpayable",
+				"type": "function"
+			},
+			{
 				"inputs": [],
 				"name": "nextSaleId",
 				"outputs": [
@@ -550,40 +772,6 @@
 					}
 				],
 				"stateMutability": "view",
-				"type": "function"
-			},
-			{
-				"inputs": [
-					{
-						"internalType": "address",
-						"name": "",
-						"type": "address"
-					},
-					{
-						"internalType": "address",
-						"name": "",
-						"type": "address"
-					},
-					{
-						"internalType": "uint256",
-						"name": "",
-						"type": "uint256"
-					},
-					{
-						"internalType": "bytes",
-						"name": "",
-						"type": "bytes"
-					}
-				],
-				"name": "onERC721Received",
-				"outputs": [
-					{
-						"internalType": "bytes4",
-						"name": "",
-						"type": "bytes4"
-					}
-				],
-				"stateMutability": "nonpayable",
 				"type": "function"
 			},
 			{
@@ -651,6 +839,25 @@
 			{
 				"inputs": [
 					{
+						"internalType": "uint256",
+						"name": "",
+						"type": "uint256"
+					}
+				],
+				"name": "saleFeeWei",
+				"outputs": [
+					{
+						"internalType": "uint256",
+						"name": "",
+						"type": "uint256"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
 						"internalType": "bytes32",
 						"name": "",
 						"type": "bytes32"
@@ -665,6 +872,19 @@
 					}
 				],
 				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "address payable",
+						"name": "newFeeRecipient",
+						"type": "address"
+					}
+				],
+				"name": "setFeeRecipient",
+				"outputs": [],
+				"stateMutability": "nonpayable",
 				"type": "function"
 			},
 			{
@@ -727,9 +947,6 @@
 				"hasRole(bytes32,address)": {
 					"details": "Returns `true` if `account` has been granted `role`."
 				},
-				"onERC721Received(address,address,uint256,bytes)": {
-					"details": "See {IERC721Receiver-onERC721Received}. Always returns `IERC721Receiver.onERC721Received.selector`."
-				},
 				"renounceRole(bytes32,address)": {
 					"details": "Revokes `role` from the calling account. Roles are often managed via {grantRole} and {revokeRole}: this function's purpose is to provide a mechanism for accounts to lose their privileges if they are compromised (such as when a trusted device is misplaced). If the calling account had been revoked `role`, emits a {RoleRevoked} event. Requirements: - the caller must be `callerConfirmation`. May emit a {RoleRevoked} event."
 				},
@@ -745,6 +962,7 @@
 		"userdoc": {
 			"kind": "user",
 			"methods": {},
+			"notice": "Marketplace escrow for listed property certificate NFTs. Seller lists by approving this contract, while the NFT stays in the seller wallet. Buyer pays seller price plus platform fee, then the contract atomically sends NFT to buyer, fee to admin, and proceeds to seller.",
 			"version": 1
 		}
 	},
@@ -852,14 +1070,6 @@
 				"dweb:/ipfs/QmZXzkSfLUbvujig3zVbpDHykpHhqLpvQtdiN3B5j4TA3u"
 			]
 		},
-		"@openzeppelin/contracts/token/ERC721/utils/ERC721Holder.sol": {
-			"keccak256": "0x33656a25fdb287ade5fed13274e8512dddcb54758702f4360c59ce4c9138c3fa",
-			"license": "MIT",
-			"urls": [
-				"bzz-raw://72973104e8680f8913d24b3f54f363487e953180b31af36ce8bd7b9605e99ed5",
-				"dweb:/ipfs/QmWzXet8qUbCwMqzpc538F3hUcjkDnEL74Afdj1thn5jTj"
-			]
-		},
 		"@openzeppelin/contracts/token/ERC721/utils/ERC721Utils.sol": {
 			"keccak256": "0xc7efbc23214ad7dced8bf2249460f4bda114d57f6a0079f84040654280f455bd",
 			"license": "MIT",
@@ -965,19 +1175,19 @@
 			]
 		},
 		"contracts/PropertyRegistry.sol": {
-			"keccak256": "0xdc4d17798388d80e79beed06348c3c6f996d64e9f60a0ce75aeb68c3a7e4b45f",
+			"keccak256": "0x6fb0dda89aeb7c7a501ce25824c66df03dab1abd9ffcc18e8078ae816d7c3df7",
 			"license": "MIT",
 			"urls": [
-				"bzz-raw://93ec91aea3c3404bf4af25d9f832a43ff9c999457bacc85885d74ab966afb125",
-				"dweb:/ipfs/QmYMdwumiz6z4mDXh9GUEmgrEYffiiR28oarpu4eHsSVLb"
+				"bzz-raw://bf6db3d31b54be95f1be07900597dc3a3dee2db16b0b99fa852dffe56677efb4",
+				"dweb:/ipfs/QmYwbuFTRsDhCj8FZEsXiceiGeQ6oYW9d696wjM9oUwjc2"
 			]
 		},
 		"contracts/PropertyTransactionEscrow.sol": {
-			"keccak256": "0x1e1ff72a3c9ba01fdfd7bf27b2fc5de4f6a8db7349b0eee0f0aac6cf63b5aef9",
+			"keccak256": "0x7bcd201acb94f42d781df7c50bebb57f7a686ee062ca3ed8e521b78fa346f3a3",
 			"license": "MIT",
 			"urls": [
-				"bzz-raw://1c7e1f22d90e011cbe279d18996e316db24e8370746d387570eb46b0ac43619f",
-				"dweb:/ipfs/QmWLe956994L9jQ36MFKVtfcHv89hzcS85u5WVWuqfMu3Z"
+				"bzz-raw://5f7f6aedf5dae928993d05796a432f6f2073caadcdfd77e7b8108a739f73c107",
+				"dweb:/ipfs/QmZrxoQ9Wc8C65vcRDW5jXaVoPSm69kpUs8fXDBmLK3moK"
 			]
 		}
 	},

@@ -1,11 +1,11 @@
 # DOCUMENTATION GUIDE - Sườn báo cáo Word cho dự án Blockchain
 
-Tài liệu này dùng để chia việc cho team viết báo cáo Word theo phương án triển khai nâng cấp: Docker đóng gói cả Backend Node.js và PostgreSQL.
+Tài liệu này dùng để chia việc cho team viết báo cáo Word theo phương án triển khai dự án hiện tại **Property Chain**: hệ thống xác thực hồ sơ cá nhân, eKYC mô phỏng và chuyển nhượng quyền sở hữu bất động sản bằng NFT. Hệ thống sử dụng Docker để đóng gói Backend Node.js và PostgreSQL cùng Frontend Web3.
 
 Tên đề tài gợi ý:
 
 ```text
-Xây dựng hệ thống xác thực và chuyển nhượng quyền sở hữu nhà bằng Blockchain, NFT, Smart Contract, Node.js, PostgreSQL và Docker
+Xây dựng hệ thống xác thực hồ sơ cá nhân và chuyển nhượng quyền sở hữu bất động sản bằng Blockchain, NFT, Smart Contract, Node.js, PostgreSQL và Docker
 ```
 
 ---
@@ -133,6 +133,8 @@ Các mục cần có:
 - `modifier`: kiểm tra điều kiện trước khi chạy hàm.
 - `event`: ghi log để backend/frontend theo dõi.
 - `AccessControl`: phân quyền admin/manager/escrow.
+- `ERC721`: NFT giấy chứng nhận đại diện quyền sở hữu bất động sản.
+- `Escrow`: giữ NFT trong quá trình giao dịch để đảm bảo mua bán an toàn.
 
 ### 6.3 NFT và ERC721
 
@@ -150,10 +152,11 @@ Các mục cần có:
 
 ### 6.5 Node.js, PostgreSQL và Docker
 
-- Node.js backend cung cấp API.
-- PostgreSQL lưu dữ liệu chi tiết.
+- Node.js backend cung cấp API, xử lý xác thực, lưu profile, dữ liệu tài sản, giao dịch, và kết nối với smart contract.
+- PostgreSQL lưu dữ liệu chi tiết như hồ sơ cá nhân, bất động sản, ảnh IPFS, lịch sử giao dịch và trạng thái eKYC.
 - Docker đóng gói backend và database thành container.
-- Docker Compose giúp chạy nhiều container cùng lúc trong cùng network.
+- Docker Compose giúp chạy nhiều container cùng lúc trong cùng network và cho phép frontend proxy `/api` sang backend.
+- Frontend Web3 được phục vụ bằng `nginx` và proxy nội bộ `/api` qua Docker service name `backend`.
 
 ---
 

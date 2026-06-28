@@ -3,8 +3,8 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Property Chain Dashboard</title>
-    <link rel="stylesheet" href="./styles.css?v=ledger-nav-visible-1" />
+    <title>Real Estate Hub</title>
+    <link rel="stylesheet" href="./styles.css?v=home-dashboard-2" />
   </head>
   <body>
     <div class="ambient" aria-hidden="true">
@@ -19,7 +19,16 @@
     <section id="authScreen" class="auth-screen">
       <div class="auth-card spotlight">
         <div class="auth-copy">
-          <p class="eyebrow">Property Chain</p>
+          <div class="auth-brand-lockup">
+            <span class="brand-mark brand-logo">
+              <img src="./assets/real-estate-hub-logo.png" alt="" />
+            </span>
+            <span>
+              <strong>Real Estate Hub</strong>
+              <small>Digital Property Certificates</small>
+            </span>
+          </div>
+          <p class="eyebrow">Web3 Real Estate Registry</p>
           <h1>Đăng nhập hệ thống xác thực sở hữu.</h1>
           <p>Đăng nhập để quản lý hồ sơ sở hữu, tải ảnh tài sản, thực hiện giao dịch NFT và xác thực quyền sở hữu qua ví MetaMask.</p>
         </div>
@@ -57,10 +66,13 @@
 
     <div class="app-shell" id="appShell" hidden>
       <header class="topbar">
-        <a class="brand" href="#top" aria-label="Property Chain Dashboard">
-          <span class="brand-mark">PC</span>
+        <a class="brand" href="#top" aria-label="Real Estate Hub">
+          <span class="brand-mark brand-logo">
+            <img src="./assets/real-estate-hub-logo.png" alt="" />
+          </span>
           <span>
-            <strong>Property Chain</strong>
+            <strong>Real Estate Hub</strong>
+            <small>Digital Property Certificates</small>
           </span>
         </a>
 
@@ -87,7 +99,7 @@
             <strong id="sessionUser">Chưa đăng nhập</strong>
           </div>
           <button class="profile-avatar-button" type="button" id="profileDrawerBtn" aria-label="Mở profile">
-            <span id="topbarAvatarText">PC</span>
+            <span id="topbarAvatarText">RH</span>
           </button>
           <button class="button secondary profile-link-button" type="button" id="viewProfileBtn">Hồ sơ</button>
           <button class="button ghost" type="button" id="refreshAllBtn">Làm mới</button>
@@ -100,7 +112,7 @@
 
         <section class="profile-view route-page" data-page="profile" id="walletProfile">
           <div class="profile-hero spotlight">
-            <div class="profile-avatar" id="profileAvatar">PC</div>
+            <div class="profile-avatar" id="profileAvatar">RH</div>
             <div class="profile-heading">
               <p class="eyebrow">Wallet Profile</p>
               <h1 id="profileGreeting">Hi, wallet holder</h1>
@@ -123,9 +135,9 @@
               <small>Danh sách tokenId của certificate</small>
             </article>
             <article class="profile-stat">
-              <span>Recorded Value</span>
+              <span id="profileValueLabel">Recorded Value</span>
               <strong id="profileTotalValue">0 ETH</strong>
-              <small>Tổng giá trị giao dịch đã ghi nhận</small>
+              <small id="profileValueHelp">Tổng giá trị giao dịch đã ghi nhận</small>
             </article>
             <article class="profile-stat">
               <span>History</span>
@@ -172,9 +184,29 @@
         </section>
 
         <section class="hero-panel spotlight route-page" data-page="home">
-          <div>
-            <p class="eyebrow">Dashboard demo</p>
+          <div class="hero-copy">
+            <p class="eyebrow">Real Estate Hub</p>
             <h1>Quản lý chứng nhận sở hữu bất động sản bằng NFT.</h1>
+            <p class="hero-subtitle">Mint, niêm yết và chuyển nhượng chứng nhận tài sản số với xác thực ví MetaMask, IPFS metadata và phí marketplace 1% minh bạch.</p>
+            <div class="hero-actions">
+              <button class="button primary" type="button" data-dashboard-action="scroll-market">Khám phá Marketplace</button>
+              <button class="button secondary" type="button" data-nav-page="properties">Mint tài sản</button>
+            </div>
+          </div>
+          <div class="hero-visual" aria-hidden="true">
+            <div class="certificate-scene">
+              <div class="scene-orbit"></div>
+              <div class="property-base">
+                <span></span>
+                <span></span>
+                <span></span>
+              </div>
+              <div class="smart-certificate">
+                <span></span>
+                <span></span>
+                <span></span>
+              </div>
+            </div>
           </div>
           <div class="status-strip" aria-label="Trạng thái hệ thống">
             <div>
@@ -186,6 +218,11 @@
               <span id="chainDot" class="dot idle"></span>
               <small>Blockchain</small>
               <strong id="chainStatus">Chưa kiểm tra</strong>
+            </div>
+            <div>
+              <span class="dot ok"></span>
+              <small>Ví admin nhận phí 1%</small>
+              <strong id="feeRecipientStatus">--</strong>
             </div>
             <div>
               <span id="walletDot" class="dot idle"></span>
@@ -219,11 +256,93 @@
         </section>
 
 
+        <section class="home-control-grid route-page" data-page="home" aria-label="Home dashboard">
+          <article class="panel spotlight home-checklist-panel">
+            <div class="panel-heading compact-heading">
+              <div>
+                <p class="eyebrow">Wallet checklist</p>
+                <h2>Sẵn sàng giao dịch</h2>
+              </div>
+              <button class="button secondary" type="button" data-dashboard-action="connect-wallet">Kết nối</button>
+            </div>
+            <div id="homeWalletChecklist" class="home-checklist"></div>
+          </article>
+
+          <article class="panel spotlight home-actions-panel">
+            <div class="panel-heading compact-heading">
+              <div>
+                <p class="eyebrow">Quick actions</p>
+                <h2>Bước tiếp theo</h2>
+              </div>
+            </div>
+            <div id="homeQuickActions" class="home-action-grid">
+              <button class="home-action" type="button" data-nav-page="properties">
+                <span>Mint</span>
+                <strong>Số hóa tài sản</strong>
+                <small>Mint NFT trước. NFT vẫn nằm trong ví chủ sở hữu.</small>
+              </button>
+              <button class="home-action" type="button" data-nav-page="transfers">
+                <span>List</span>
+                <strong>Mở bán NFT</strong>
+                <small>Chỉ approve và list khi seller muốn đưa tài sản lên sàn.</small>
+              </button>
+              <button class="home-action" type="button" data-nav-page="profile">
+                <span>Assets</span>
+                <strong>Tài sản của tôi</strong>
+                <small>Xem NFT đang sở hữu, token và lịch sử giao dịch.</small>
+              </button>
+              <button class="home-action" type="button" data-dashboard-action="scroll-market">
+                <span>Market</span>
+                <strong>Xem Marketplace</strong>
+                <small>Mua NFT bất động sản đã niêm yết qua escrow.</small>
+              </button>
+            </div>
+          </article>
+
+          <article class="panel spotlight home-snapshot-panel">
+            <div class="panel-heading compact-heading">
+              <div>
+                <p class="eyebrow">Portfolio snapshot</p>
+                <h2>Tổng quan ví</h2>
+              </div>
+            </div>
+            <div class="home-snapshot-grid">
+              <div>
+                <span>NFT sở hữu</span>
+                <strong id="homeOwnedNftCount">0</strong>
+              </div>
+              <div>
+                <span>Đang bán</span>
+                <strong id="homeListedNftCount">0</strong>
+              </div>
+              <div>
+                <span>Lịch sử</span>
+                <strong id="homeWalletHistoryCount">0</strong>
+              </div>
+              <div>
+                <span id="homeValueLabel">Giá trị</span>
+                <strong id="homeWalletValue">0 ETH</strong>
+              </div>
+            </div>
+          </article>
+
+          <article class="panel spotlight home-activity-panel">
+            <div class="panel-heading compact-heading">
+              <div>
+                <p class="eyebrow">Recent activity</p>
+                <h2>Sổ giao dịch mới nhất</h2>
+              </div>
+              <button class="button secondary" type="button" id="refreshHomeActivityBtn">Làm mới</button>
+            </div>
+            <div id="homeActivityList" class="home-activity-list"></div>
+          </article>
+        </section>
+
         <section class="panel spotlight route-page home-market-section" data-page="home" id="homeNftMarket">
           <div class="panel-heading">
             <div>
               <p class="eyebrow">Marketplace view</p>
-              <h2>NFT giấy chứng nhận đang có</h2>
+              <h2>NFT giấy chứng nhận đang bán</h2>
             </div>
             <button class="button secondary" type="button" id="refreshNftMarketBtn">Tải NFT</button>
           </div>
@@ -236,9 +355,8 @@
               <div class="panel-heading">
                 <div>
                   <p class="eyebrow">Overview</p>
-                  <h2>Luồng demo nhanh</h2>
+                  <h2>Guide</h2>
                 </div>
-                <span class="badge">User view mặc định</span>
               </div>
 
               <div class="overview-grid">
@@ -248,11 +366,11 @@
                 </article>
                 <article>
                   <strong>2. Bất động sản</strong>
-                  <small>Tạo hồ sơ tài sản trong hệ thống, sau đó quản trị viên mint NFT giấy chứng nhận.</small>
+                  <small>User tạo tài sản, upload metadata IPFS và mint NFT giấy chứng nhận vào chính ví của mình.</small>
                 </article>
                 <article>
                   <strong>3. Giao dịch</strong>
-                  <small>Seller tạo sale, approve NFT và deposit vào escrow để hệ thống giữ trung gian.</small>
+                  <small>Seller list NFT, buyer mua trực tiếp trên marketplace và smart contract tự chuyển NFT, tiền seller, phí admin 1%.</small>
                 </article>
                 <article>
                   <strong>4. Xác thực</strong>
@@ -296,48 +414,47 @@
                 </div>
               </div>
 
-
               <div class="divider"></div>
 
               <div class="panel-heading compact-heading">
                 <div>
-                  <p class="eyebrow">Tài khoản</p>
-                  <h2>Tài khoản hệ thống</h2>
+                  <p class="eyebrow">Risk control</p>
+                  <h2>Khóa user hoặc NFT nghi ngờ lừa đảo</h2>
                 </div>
-                <button class="button secondary" type="button" id="loadUsersBtn">Tải tài khoản</button>
               </div>
 
-              <form id="userAccountForm" class="form-grid two">
+              <form id="riskUserForm" class="form-grid two">
                 <label>
-                  Username
-                  <input name="username" value="user01" required />
+                  User ID
+                  <input name="user_id" inputmode="numeric" placeholder="Chọn user hoặc nhập ID" />
                 </label>
                 <label>
-                  Tên hiển thị
-                  <input name="display_name" value="Normal User" required />
-                </label>
-                <label>
-                  Ví đăng nhập
-                  <input name="wallet_address" placeholder="0x..." required />
-                </label>
-                <label>
-                  Vai trò
-                  <select name="role">
-                    <option value="user">user</option>
-                    <option value="admin">admin</option>
-                  </select>
-                </label>
-                <label class="wide">
-                  Profile ID liên kết, có thể để trống
-                  <input name="profile_id" inputmode="numeric" placeholder="VD: 2" />
+                  Lý do khóa user
+                  <input name="reason" value="Nghi ngờ lừa đảo hoặc vi phạm chính sách nền tảng" />
                 </label>
               </form>
-
-              <div class="button-row">
-                <button class="button primary" type="button" id="createUserBtn">Tạo tài khoản</button>
+              <div class="button-row wrap">
+                <button class="button secondary" type="button" id="suspendUserBtn">Khóa user</button>
+                <button class="button secondary" type="button" id="restoreUserBtn">Mở lại user</button>
               </div>
 
-              <div id="userList" class="data-list compact-list"></div>
+              <form id="riskNftForm" class="form-grid two">
+                <label>
+                  NFT / Property ID
+                  <input name="property_id" inputmode="numeric" placeholder="Chọn NFT hoặc nhập ID tài sản" />
+                </label>
+                <label>
+                  Lý do khóa NFT
+                  <input name="reason" value="NFT bị báo cáo lừa đảo hoặc thông tin tài sản không hợp lệ" />
+                </label>
+              </form>
+              <div class="button-row wrap">
+                <button class="button primary" type="button" id="disableNftBtn">Khóa NFT</button>
+                <button class="button secondary" type="button" id="restoreNftBtn">Mở lại NFT</button>
+              </div>
+
+              <div id="riskAdminList" class="risk-admin-list"></div>
+
             </section>
 
             <section class="panel spotlight route-page" data-page="profiles" id="profiles">
@@ -360,11 +477,11 @@
                 </label>
                 <label>
                   Địa chỉ ví
-                  <input id="profileWallet" name="wallet_address" placeholder="0x..." required />
+                  <input id="profileWallet" name="wallet_address" placeholder="0x..." />
                 </label>
                 <label>
                   Họ tên
-                  <input name="full_name" value="Nguyen Van A" required />
+                  <input name="full_name" placeholder="Nguyễn Văn A" autocomplete="name" required />
                 </label>
                 <label>
                   Quốc tịch
@@ -372,29 +489,28 @@
                 </label>
                 <label>
                   CCCD
-                  <input name="identify_id" value="123456789001" inputmode="numeric" required />
+                  <input name="identify_id" placeholder="012345678901" inputmode="numeric" autocomplete="off" required />
                 </label>
                 <label>
                   Email
-                  <input name="email" value="a@example.com" type="email" />
+                  <input name="email" placeholder="email@example.com" type="email" autocomplete="email" required />
                 </label>
                 <label>
                   Số điện thoại
-                  <input name="phone" value="0900000001" required />
+                  <input name="phone" placeholder="0900000000" autocomplete="tel" required />
                 </label>
                 <label class="wide">
                   Mã dữ liệu hồ sơ
                   <input name="profile_data_hash" value="PROFILE-A-DATA" required />
                 </label>
-                <label class="checkbox-row">
-                  <input name="verified" type="checkbox" checked />
-                  Xác thực ngay trên smart contract
+                <label class="wide">
+                  Địa chỉ
+                  <input name="address" placeholder="Số nhà, phường/xã, quận/huyện, tỉnh/thành" autocomplete="street-address" required />
                 </label>
               </form>
 
               <div class="button-row">
                 <button class="button primary" type="button" id="createProfileBtn">Lưu hồ sơ</button>
-                <button class="button secondary" type="button" id="registerPersonChainBtn" data-admin-only>Ghi person on-chain</button>
               </div>
             </section>
 
@@ -422,7 +538,19 @@
                 </label>
                 <label>
                   Certificate URI
-                  <input name="certificate_uri" value="demo://certificate-property-001" required />
+                  <input name="certificate_uri" value="ipfs://property-certificate-001" required />
+                </label>
+                <label>
+                  Giá seller muốn nhận khi list (ETH)
+                  <input name="asking_price_eth" value="0.001" inputmode="decimal" required />
+                </label>
+                <label>
+                  Diện tích (m²)
+                  <input name="area_m2" value="100" inputmode="numeric" required />
+                </label>
+                <label>
+                  Số phòng
+                  <input name="rooms" value="3" inputmode="numeric" required />
                 </label>
                 <label class="wide">
                   Địa chỉ tài sản
@@ -436,11 +564,23 @@
                   Legal document hash
                   <input name="legal_document_hash" value="LEGAL-DOC-001" required />
                 </label>
+                <input type="hidden" name="valuation_report_uri" value="" />
               </form>
 
               <div class="button-row">
                 <button class="button primary" type="button" id="createPropertyBtn">Lưu tài sản</button>
-                <button class="button secondary" type="button" id="registerPropertyChainBtn" data-admin-only>Mint NFT on-chain</button>
+                <button class="button secondary" type="button" id="registerPropertyChainBtn">Mint Certificate</button>
+              </div>
+
+              <div class="mint-module" aria-label="Mint certificate module">
+                <div>
+                  <span>Mint Certificate</span>
+                  <strong>Certificate supply readiness</strong>
+                  <small>Hoàn tất hồ sơ tài sản, metadata IPFS và ký ví để phát hành NFT vào ví owner.</small>
+                </div>
+                <div class="supply-progress" aria-hidden="true">
+                  <span></span>
+                </div>
               </div>
 
               <div class="divider"></div>
@@ -465,7 +605,7 @@
               </form>
 
               <div class="button-row">
-                <button class="button secondary" type="button" id="patchPropertyChainBtn" data-admin-only>Cập nhật mã on-chain</button>
+                <button class="button secondary" type="button" id="patchPropertyChainBtn">Cập nhật mã NFT</button>
               </div>
 
               <div class="divider"></div>
@@ -489,7 +629,15 @@
                 </label>
                 <label class="wide">
                   Chọn ảnh nhà/đất/chung cư
-                  <input name="image" type="file" accept="image/*" />
+                  <input name="image" type="file" accept="image/*" multiple />
+                </label>
+                <label class="wide">
+                  File pháp lý (PDF)
+                  <input name="legal_document" type="file" accept="application/pdf" />
+                </label>
+                <label class="wide">
+                  File thẩm định giá (PDF)
+                  <input name="valuation_report" type="file" accept="application/pdf" />
                 </label>
                 <label class="wide">
                   Chú thích ảnh
@@ -506,8 +654,8 @@
               </form>
 
               <div class="button-row wrap">
-                <button class="button secondary" type="button" id="checkIpfsBtn">Kiểm tra IPFS</button>
-                <button class="button primary" type="button" id="uploadPropertyImageBtn">Upload ảnh IPFS</button>
+                <button class="button primary" type="button" id="uploadImagesBtn">📷 Upload ảnh</button>
+                <button class="button primary" type="button" id="uploadPdfBtn">📄 Upload file PDF</button>
                 <button class="button secondary" type="button" id="createMetadataBtn">Tạo metadata NFT</button>
               </div>
 
@@ -519,9 +667,9 @@
               <div class="panel-heading">
                 <div>
                   <p class="eyebrow">Step 3</p>
-                  <h2>Chuyển nhượng NFT</h2>
+                  <h2>Niêm yết NFT</h2>
                 </div>
-                <span class="badge">Seller dùng ví MetaMask</span>
+                <span class="badge">Niêm yết không lưu ký</span>
               </div>
 
               <form id="transferForm" class="form-grid three">
@@ -538,59 +686,28 @@
                   <input name="certificate_token_id" value="1" inputmode="numeric" required />
                 </label>
                 <label>
-                  ID hồ sơ người mua
-                  <input name="buyer_profile_id" value="2" inputmode="numeric" required />
+                  Giá seller muốn nhận (ETH)
+                  <input name="price_eth" value="0.001" inputmode="decimal" required />
                 </label>
                 <label>
-                  Ví buyer
-                  <input name="buyer_wallet_address" placeholder="0x..." required />
-                </label>
-                <label>
-                  Giá Wei
-                  <input name="price_wei" value="1000000000000000000" inputmode="numeric" required />
-                </label>
-                <label>
-                  Mã giao dịch
-                  <input name="backend_transaction_id" value="TRANSFER-001" required />
-                </label>
-                <label>
-                  Mã kiểm chứng giao dịch
-                  <input name="backend_transaction_hash" value="TRANSFER-001-HASH" required />
+                  Mã listing
+                  <input name="backend_transaction_id" value="LIST-001" required />
                 </label>
                 <label>
                   Document hash
-                  <input name="document_hash" value="TRANSFER-DOC-001" required />
+                  <input name="document_hash" value="LIST-DOC-001" required />
+                </label>
+                <label>
+                  saleId
+                  <input name="listing_sale_id" inputmode="numeric" readonly />
                 </label>
               </form>
 
               <div class="button-row wrap">
-                <button class="button primary" type="button" id="createTransferBtn">Tạo hồ sơ giao dịch</button>
-                <button class="button secondary" type="button" id="createSaleChainBtn">Tạo sale on-chain</button>
-                <button class="button secondary" type="button" id="approveNftBtn">Approve NFT</button>
-                <button class="button secondary" type="button" id="depositNftBtn">Deposit NFT</button>
+                <button class="button primary" type="button" id="listNftBtn">Approve & List NFT</button>
+                <button class="button secondary" type="button" id="cancelListingBtn">Hủy listing</button>
               </div>
-
-              <div class="divider"></div>
-
-              <form id="releaseForm" class="form-grid three compact">
-                <label>
-                  ID hồ sơ giao dịch
-                  <input name="transfer_db_id" value="1" inputmode="numeric" />
-                </label>
-                <label>
-                  saleId on-chain
-                  <input name="sale_id" value="1" inputmode="numeric" />
-                </label>
-                <label>
-                  Tx hash
-                  <input name="tx_hash" placeholder="0x..." />
-                </label>
-              </form>
-
-              <div class="button-row wrap">
-                <button class="button secondary" type="button" id="markDepositSqlBtn" data-admin-only>Đánh dấu đã ký gửi</button>
-                <button class="button primary" type="button" id="releaseBackendBtn" data-admin-only>Xác nhận chuyển nhượng</button>
-              </div>
+              <small>Giá niêm yết hiển thị cho buyer sẽ bao gồm giá bán gốc và phí giao dịch 1%.</small>
             </section>
 
             <section class="panel spotlight route-page" data-page="ledger" id="ledger">
@@ -653,7 +770,7 @@
           </div>
 
           <aside class="side-column">
-            <section class="panel spotlight sticky-panel">
+            <section class="panel spotlight sticky-panel" hidden>
               <div class="panel-heading">
                 <div>
                   <p class="eyebrow">Runtime</p>
@@ -689,7 +806,7 @@
       <div class="drawer-cover">
         <button class="icon-button drawer-close" type="button" id="profileDrawerCloseBtn" aria-label="Đóng profile">×</button>
         <div class="drawer-identity">
-          <div class="profile-avatar drawer-avatar" id="drawerAvatar">PC</div>
+          <div class="profile-avatar drawer-avatar" id="drawerAvatar">RH</div>
           <div>
             <strong id="drawerTitle">Hi, wallet</strong>
             <small id="drawerWallet">--</small>
@@ -701,7 +818,7 @@
             <strong id="drawerOwnedCount">0</strong>
           </div>
           <div>
-            <span>Total Value</span>
+            <span id="drawerTotalLabel">Total Value</span>
             <strong id="drawerTotalValue">0 ETH</strong>
           </div>
         </div>
@@ -726,9 +843,66 @@
       </div>
     </aside>
 
+    <div id="propertyDetailBackdrop" class="modal-backdrop" hidden></div>
+    <section id="propertyDetailModal" class="property-detail-modal" hidden aria-label="Property detail">
+      <div class="property-detail-shell">
+        <button class="icon-button modal-close" type="button" id="propertyDetailCloseBtn" aria-label="Đóng chi tiết">×</button>
+        <div id="propertyDetailContent" class="property-detail-content"></div>
+      </div>
+    </section>
+
+    <div id="imageSlideshowBackdrop" class="modal-backdrop" hidden></div>
+    <section id="imageSlideshowModal" class="image-slideshow-modal" hidden aria-label="Property image slideshow">
+      <div class="image-slideshow-shell">
+        <button class="icon-button modal-close" type="button" id="imageSlideshowCloseBtn" aria-label="Đóng slideshow">×</button>
+        <button class="icon-button slideshow-nav prev" type="button" id="imageSlideshowPrevBtn" aria-label="Ảnh trước">‹</button>
+        <figure class="image-slideshow-frame">
+          <img id="imageSlideshowImg" alt="Property image preview" />
+          <figcaption>
+            <strong id="imageSlideshowTitle">Ảnh tài sản</strong>
+            <small id="imageSlideshowMeta">1 / 1</small>
+          </figcaption>
+        </figure>
+        <button class="icon-button slideshow-nav next" type="button" id="imageSlideshowNextBtn" aria-label="Ảnh sau">›</button>
+      </div>
+    </section>
+
+    <div id="mockEkycBackdrop" class="modal-backdrop" hidden></div>
+    <section id="mockEkycModal" class="ekyc-modal" hidden aria-label="Mock eKYC">
+      <div class="ekyc-shell">
+        <button class="icon-button modal-close" type="button" id="mockEkycCloseBtn" aria-label="Đóng eKYC">×</button>
+        <form id="mockEkycForm" class="ekyc-form">
+          <p class="eyebrow">Mock eKYC</p>
+          <h2>Xác thực danh tính</h2>
+          <p id="mockEkycHint">Upload ảnh CCCD và chân dung để kích hoạt quyền giao dịch cho ví hiện tại.</p>
+          <small id="mockEkycStatus" class="ekyc-status-note">Trạng thái hiện tại: chưa xác thực eKYC mock.</small>
+
+          <div class="ekyc-file-grid">
+            <label class="ekyc-upload-box">
+              <span>CCCD mặt trước</span>
+              <input name="id_front" type="file" accept="image/*" required />
+            </label>
+            <label class="ekyc-upload-box">
+              <span>CCCD mặt sau</span>
+              <input name="id_back" type="file" accept="image/*" required />
+            </label>
+            <label class="ekyc-upload-box">
+              <span>Ảnh chân dung</span>
+              <input name="portrait" type="file" accept="image/*" required />
+            </label>
+          </div>
+
+          <div class="button-row wrap">
+            <button class="button secondary" type="button" id="mockEkycCancelBtn">Để sau</button>
+            <button class="button primary" type="submit">Hoàn tất eKYC</button>
+          </div>
+        </form>
+      </div>
+    </section>
+
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
     <script src="./vendor/ethers.umd.min.js"></script>
-    <script src="./app.js?v=ledger-nav-visible-1"></script>
+    <script src="./app.js?v=home-dashboard-2"></script>
   </body>
 </html>

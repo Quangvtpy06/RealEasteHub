@@ -1,8 +1,15 @@
 # README DEMO - Property Chain
 
-Tài liệu này dùng để chạy demo sản phẩm hiện tại của dự án **Property Chain**: hệ thống xác thực và chuyển nhượng quyền sở hữu bất động sản bằng NFT, kết hợp Smart Contract, Node.js Backend, PostgreSQL, Docker, MetaMask, Pinata/IPFS và Frontend Web3.
+Tài liệu này dùng để chạy demo sản phẩm hiện tại của dự án **Property Chain**: hệ thống quản lý hồ sơ cá nhân, eKYC mô phỏng, và chuyển nhượng quyền sở hữu bất động sản bằng NFT. Dự án kết hợp Smart Contract, Node.js Backend, PostgreSQL, Docker, MetaMask, Pinata/IPFS và Frontend Web3.
 
-> Lưu ý khi demo: tuyệt đối không mở file `.env`, không chiếu private key, Pinata JWT, ngrok authtoken hoặc ví thật có tài sản thật. Chỉ dùng Sepolia/testnet.
+> Lưu ý khi demo: không mở file `.env`, không chiếu private key, Pinata JWT, ngrok authtoken hoặc ví thật có tài sản thật. Chỉ dùng Sepolia/testnet.
+
+## Cập nhật demo hiện tại
+
+- eKYC là bước xác thực hồ sơ cá nhân trước khi mua/bán NFT. Sau khi hoàn tất eKYC, hệ thống sẽ lưu trạng thái `verified` trên server và hiển thị cho mọi người.
+- Frontend giữ một bản mock eKYC cục bộ để tiện demo, nhưng trạng thái chính thức được đồng bộ với backend qua endpoint `POST /api/profiles/:id/ekyc`.
+- Frontend chạy trên `http://localhost:5173`; Nginx proxy `/api/` sang backend tại `http://backend:3000` trong Docker.
+- Khi dùng ngrok, chỉ cần public frontend port `5173` vì frontend đã proxy API nội bộ.
 
 ## 1. Trạng thái hiện tại của dự án
 
@@ -272,20 +279,21 @@ Trên trang chủ:
 - Bấm avatar ví để mở profile drawer bên phải.
 - Drawer hiển thị NFT đang sở hữu, token, lịch sử giao dịch.
 - Trang `Profile` hiển thị dữ liệu tương tự ở dạng trang đầy đủ.
+- Nếu hồ sơ đã eKYC thành công, trạng thái sẽ hiển thị `Đã hoàn tất` và nút eKYC không còn mở modal nữa.
 
 ### 6.6. Chuyển nhượng NFT qua Escrow
 
 Luồng demo chuyển nhượng:
 
-1. Tạo giao dịch chuyển nhượng, chọn tài sản, seller, buyer, giá.
-2. Backend hoặc frontend tạo sale trên Escrow.
-3. Seller approve NFT cho Escrow.
-4. Seller deposit NFT vào Escrow.
-5. Hệ thống đánh dấu đã ký gửi.
-6. Admin xác nhận chuyển nhượng/release.
+1. Buyer tạo yêu cầu chuyển nhượng, chọn tài sản, buyer, giá.
+2. Seller đăng nhập bằng ví đang giữ NFT và ký chấp nhận bán.
+3. Seller tạo sale trên Escrow.
+4. Seller approve NFT cho Escrow.
+5. Seller deposit NFT vào Escrow và trả phí 0.01% vào ví admin hệ thống.
+6. Seller hoặc buyer yêu cầu hệ thống release.
 7. Escrow chuyển NFT cho buyer.
 8. Registry cập nhật chủ sở hữu mới.
-9. Sổ giao dịch ghi lại lịch sử.
+9. Sổ giao dịch ghi lại lịch sử cho cả seller và buyer.
 
 Sau khi hoàn tất, kiểm tra:
 

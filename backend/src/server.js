@@ -160,6 +160,9 @@ function sanitizeUser(user) {
     profileId: user.profile_id,
     walletAddress: user.wallet_address,
     active: user.active,
+    suspensionReason: user.suspension_reason,
+    suspendedAt: user.suspended_at,
+    suspendedByUserId: user.suspended_by_user_id,
   };
 }
 
@@ -242,6 +245,9 @@ async function ensureAuthSchema() {
     `);
 
     await query('ALTER TABLE app_users ADD COLUMN IF NOT EXISTS wallet_address TEXT');
+    await query('ALTER TABLE app_users ADD COLUMN IF NOT EXISTS suspension_reason TEXT');
+    await query('ALTER TABLE app_users ADD COLUMN IF NOT EXISTS suspended_at TIMESTAMPTZ');
+    await query('ALTER TABLE app_users ADD COLUMN IF NOT EXISTS suspended_by_user_id BIGINT REFERENCES app_users(id)');
     await query('CREATE UNIQUE INDEX IF NOT EXISTS idx_app_users_username ON app_users(LOWER(username))');
     await query('CREATE UNIQUE INDEX IF NOT EXISTS idx_app_users_wallet ON app_users(LOWER(wallet_address)) WHERE wallet_address IS NOT NULL');
     await query('CREATE INDEX IF NOT EXISTS idx_app_users_role_active ON app_users(role, active)');
@@ -277,6 +283,30 @@ async function ensureAuthSchema() {
 
 function ensureAuthSchemaMiddleware(req, res, next) {
   ensureAuthSchema().then(() => next()).catch(next);
+}
+
+let profileSchemaReady = false;
+let profileSchemaPromise = null;
+
+async function ensureProfileSchema() {
+  if (profileSchemaReady) {
+    return;
+  }
+
+  if (profileSchemaPromise) {
+    return profileSchemaPromise;
+  }
+
+  profileSchemaPromise = (async () => {
+    await query("ALTER TABLE profiles ADD COLUMN IF NOT EXISTS address TEXT NOT NULL DEFAULT ''");
+    profileSchemaReady = true;
+  })();
+
+  return profileSchemaPromise;
+}
+
+function ensureProfileSchemaMiddleware(req, res, next) {
+  ensureProfileSchema().then(() => next()).catch(next);
 }
 
 const walletLoginChallenges = new Map();
@@ -346,7 +376,7 @@ function verifyWalletChallenge(address, signature) {
 
 async function findUserByWallet(address, activeOnly = true) {
   const result = await query(`
-    SELECT id, username, display_name, role, profile_id, wallet_address, active
+    SELECT id, username, display_name, role, profile_id, wallet_address, active, suspension_reason, suspended_at, suspended_by_user_id
     FROM app_users
     WHERE LOWER(wallet_address) = LOWER($1)
       ${activeOnly ? 'AND active = TRUE' : ''}
@@ -358,7 +388,17 @@ async function findUserByWallet(address, activeOnly = true) {
   }
 
   const linked = await query(`
-    SELECT u.id, u.username, u.display_name, u.role, u.profile_id, COALESCE(u.wallet_address, p.wallet_address) AS wallet_address, u.active
+    SELECT
+      u.id,
+      u.username,
+      u.display_name,
+      u.role,
+      u.profile_id,
+      COALESCE(u.wallet_address, p.wallet_address) AS wallet_address,
+      u.active,
+      u.suspension_reason,
+      u.suspended_at,
+      u.suspended_by_user_id
     FROM app_users u
     JOIN profiles p ON p.id = u.profile_id
     WHERE LOWER(p.wallet_address) = LOWER($1)
@@ -475,6 +515,80 @@ function ensureIpfsSchemaMiddleware(req, res, next) {
   ensureIpfsSchema().then(() => next()).catch(next);
 }
 
+let transferSchemaReady = false;
+let transferSchemaPromise = null;
+
+let propertySchemaReady = false;
+let propertySchemaPromise = null;
+
+async function ensurePropertySchema() {
+  if (propertySchemaReady) {
+    return;
+  }
+
+  if (propertySchemaPromise) {
+    return propertySchemaPromise;
+  }
+
+  propertySchemaPromise = (async () => {
+    await query('ALTER TABLE property ADD COLUMN IF NOT EXISTS asking_price_wei NUMERIC(78, 0) NOT NULL DEFAULT 0');
+    await query('ALTER TABLE property ADD COLUMN IF NOT EXISTS area_m2 NUMERIC(18, 2) NOT NULL DEFAULT 0');
+    await query('ALTER TABLE property ADD COLUMN IF NOT EXISTS rooms NUMERIC(18, 0) NOT NULL DEFAULT 0');
+    await query("ALTER TABLE property ADD COLUMN IF NOT EXISTS valuation_report_hash TEXT DEFAULT ''");
+    await query("ALTER TABLE property ADD COLUMN IF NOT EXISTS valuation_report_uri TEXT DEFAULT ''");
+    await query("ALTER TABLE property ADD COLUMN IF NOT EXISTS listing_status TEXT NOT NULL DEFAULT 'unlisted'");
+    await query('ALTER TABLE property ADD COLUMN IF NOT EXISTS listing_sale_id NUMERIC(78, 0)');
+    await query('ALTER TABLE property ADD COLUMN IF NOT EXISTS listing_tx_hash TEXT');
+    await query('ALTER TABLE property ADD COLUMN IF NOT EXISTS listed_at TIMESTAMPTZ');
+    await query('ALTER TABLE property ADD COLUMN IF NOT EXISTS sold_at TIMESTAMPTZ');
+    await query("ALTER TABLE property ADD COLUMN IF NOT EXISTS risk_status TEXT NOT NULL DEFAULT 'clear'");
+    await query('ALTER TABLE property ADD COLUMN IF NOT EXISTS risk_reason TEXT');
+    await query('ALTER TABLE property ADD COLUMN IF NOT EXISTS risk_flagged_at TIMESTAMPTZ');
+    await query('ALTER TABLE property ADD COLUMN IF NOT EXISTS risk_flagged_by_user_id BIGINT REFERENCES app_users(id)');
+    await query('CREATE INDEX IF NOT EXISTS idx_property_listing_status ON property(listing_status, updated_at DESC)');
+    await query('CREATE INDEX IF NOT EXISTS idx_property_risk_status ON property(risk_status, active, updated_at DESC)');
+    propertySchemaReady = true;
+  })();
+
+  try {
+    await propertySchemaPromise;
+  } finally {
+    propertySchemaPromise = null;
+  }
+}
+
+function ensurePropertySchemaMiddleware(req, res, next) {
+  ensurePropertySchema().then(() => next()).catch(next);
+}
+
+async function ensureTransferSchema() {
+  if (transferSchemaReady) {
+    return;
+  }
+
+  if (transferSchemaPromise) {
+    return transferSchemaPromise;
+  }
+
+  transferSchemaPromise = (async () => {
+    await query('ALTER TABLE transfer_contract ADD COLUMN IF NOT EXISTS seller_acceptance_message TEXT');
+    await query('ALTER TABLE transfer_contract ADD COLUMN IF NOT EXISTS seller_signature TEXT');
+    await query('ALTER TABLE transfer_contract ADD COLUMN IF NOT EXISTS seller_signed_at TIMESTAMPTZ');
+    await query('ALTER TABLE transfer_contract ADD COLUMN IF NOT EXISTS fee_wei NUMERIC(78, 0)');
+    transferSchemaReady = true;
+  })();
+
+  try {
+    await transferSchemaPromise;
+  } finally {
+    transferSchemaPromise = null;
+  }
+}
+
+function ensureTransferSchemaMiddleware(req, res, next) {
+  ensureTransferSchema().then(() => next()).catch(next);
+}
+
 async function getPropertyRecord(propertyId) {
   const result = await query(`
     SELECT *
@@ -498,12 +612,59 @@ function requirePropertyEditor(req, property) {
     return;
   }
 
+  if (req.user.wallet_address && sameWallet(req.user.wallet_address, property.owner_wallet_address)) {
+    return;
+  }
+
   throw new ApiError(403, 'FORBIDDEN', 'Only admin or the linked property owner can upload IPFS data');
 }
 
+function sameWallet(left, right) {
+  return Boolean(left && right && String(left).toLowerCase() === String(right).toLowerCase());
+}
+
+function requireWalletParticipant(req, ...wallets) {
+  if (req.user.role === 'admin') {
+    return;
+  }
+
+  if (wallets.some((wallet) => sameWallet(req.user.wallet_address, wallet))) {
+    return;
+  }
+
+  throw new ApiError(403, 'FORBIDDEN', 'Only a linked wallet participant can perform this action');
+}
+
+function requireSellerWallet(req, sellerWallet) {
+  if (sameWallet(req.user.wallet_address, sellerWallet)) {
+    return;
+  }
+
+  throw new ApiError(403, 'ONLY_SELLER_WALLET', 'Only the seller wallet can sign this transfer');
+}
+
+function buildSellerAcceptanceMessage(transfer) {
+  return [
+    'Property Chain seller acceptance.',
+    'Only sign this message if you accept selling this NFT certificate.',
+    `Transfer DB ID: ${transfer.id}`,
+    `Backend transaction: ${transfer.backend_transaction_id}`,
+    `Property DB ID: ${transfer.property_id}`,
+    `SC property ID: ${transfer.sc_property_id}`,
+    `Token ID: ${transfer.certificate_token_id}`,
+    `Seller: ${getAddress(transfer.seller_wallet_address)}`,
+    `Buyer: ${getAddress(transfer.buyer_wallet_address)}`,
+    `Price wei: ${transfer.price_wei}`,
+    `Document hash: ${transfer.document_hash}`,
+  ].join('\n');
+}
+
 function buildPropertyMetadata(property, images, overrides = {}) {
-  const primaryImage = images[0] || null;
-  const imageUri = overrides.image_uri || primaryImage?.image_uri || '';
+  // Chỉ lấy file ảnh thật, loại bỏ PDF (sổ đỏ/thẩm định giá) vốn cũng nằm trong cùng bảng property_images
+  const imageOnly = images.filter((image) => String(image.mime_type || '').toLowerCase().startsWith('image/'));
+  const primaryImage = imageOnly[0] || null;
+  // Dùng gateway_url (https://...) thay vì image_uri (ipfs://...) để MetaMask chắc chắn hiển thị được avatar
+  const imageUri = overrides.image_uri || primaryImage?.gateway_url || primaryImage?.image_uri || '';
 
   return {
     name: overrides.name || `Property Certificate #${property.id}`,
@@ -518,6 +679,7 @@ function buildPropertyMetadata(property, images, overrides = {}) {
       location: property.location,
       propertyDataHash: property.property_data_hash,
       legalDocumentHash: property.legal_document_hash,
+      askingPriceWei: property.asking_price_wei ? String(property.asking_price_wei) : '0',
       images: images.map((image) => ({
         cid: image.image_cid,
         uri: image.image_uri,
@@ -529,6 +691,7 @@ function buildPropertyMetadata(property, images, overrides = {}) {
       { trait_type: 'Database Property ID', value: String(property.id) },
       { trait_type: 'Backend Property ID', value: property.backend_property_id },
       { trait_type: 'Location', value: property.location },
+      { trait_type: 'Asking Price Wei', value: property.asking_price_wei ? String(property.asking_price_wei) : '0' },
       { trait_type: 'Certificate Type', value: 'Property Ownership' },
       { trait_type: 'Active', value: property.active ? 'true' : 'false' },
     ],
@@ -562,8 +725,12 @@ const imageUpload = multer({
     fileSize: Number(process.env.MAX_UPLOAD_BYTES || 10 * 1024 * 1024),
   },
   fileFilter: (req, file, callback) => {
-    if (!file.mimetype || !file.mimetype.startsWith('image/')) {
-      return callback(new ApiError(400, 'INVALID_FILE_TYPE', 'Only image uploads are allowed'));
+    const mimetype = file.mimetype || '';
+    // Route này dùng chung cho ảnh tài sản (image/*) lẫn file pháp lý/thẩm định giá (application/pdf)
+    const isAllowed = mimetype.startsWith('image/') || mimetype === 'application/pdf';
+
+    if (!isAllowed) {
+      return callback(new ApiError(400, 'INVALID_FILE_TYPE', 'Only image or PDF uploads are allowed'));
     }
 
     return callback(null, true);
@@ -609,7 +776,11 @@ app.post('/api/auth/wallet/login', asyncHandler(async (req, res) => {
   const address = normalizeWalletAddress(req.body.wallet_address || req.body.address);
   verifyWalletChallenge(address, requireText(req.body, 'signature'));
 
-  let user = await findUserByWallet(address, true);
+  let user = await findUserByWallet(address, false);
+
+  if (user && !user.active) {
+    throw new ApiError(401, 'USER_INACTIVE', user.suspension_reason || 'This wallet has been disabled on the platform');
+  }
 
   if (!user) {
     user = await linkConfiguredAdminWallet(address);
@@ -729,7 +900,19 @@ app.get('/api/auth/me', authenticate, asyncHandler(async (req, res) => {
 
 app.get('/api/auth/users', authenticate, requireRoles('admin'), asyncHandler(async (req, res) => {
   const result = await query(`
-    SELECT id, username, display_name, role, profile_id, wallet_address, active, created_at, updated_at
+    SELECT
+      id,
+      username,
+      display_name,
+      role,
+      profile_id,
+      wallet_address,
+      active,
+      suspension_reason,
+      suspended_at,
+      suspended_by_user_id,
+      created_at,
+      updated_at
     FROM app_users
     ORDER BY created_at DESC
   `);
@@ -761,26 +944,65 @@ app.post('/api/auth/users', authenticate, requireRoles('admin'), asyncHandler(as
 }));
 
 app.patch('/api/auth/users/:id/active', authenticate, requireRoles('admin'), asyncHandler(async (req, res) => {
-  const result = await query(`
-    UPDATE app_users
-    SET active = $1
-    WHERE id = $2
-    RETURNING id, username, display_name, role, profile_id, wallet_address, active
-  `, [
-    parseBoolean(req.body.active, 'active'),
-    parseId(req.params.id),
-  ]);
+  const userId = parseId(req.params.id);
+  const nextActive = parseBoolean(req.body.active, 'active');
+  const reason = optionalText(req.body, 'reason') || optionalText(req.body, 'suspension_reason');
 
-  if (result.rowCount === 0) {
+  if (!nextActive && String(userId) === String(req.user.id)) {
+    throw new ApiError(400, 'CANNOT_DISABLE_SELF', 'Admin cannot disable the current login account');
+  }
+
+  const target = await query('SELECT id, role FROM app_users WHERE id = $1', [userId]);
+
+  if (target.rowCount === 0) {
     throw new ApiError(404, 'USER_NOT_FOUND', 'User not found');
   }
+
+  if (!nextActive && target.rows[0].role === 'admin') {
+    const admins = await query(
+      "SELECT COUNT(*)::INT AS total FROM app_users WHERE role = 'admin' AND active = TRUE AND id <> $1",
+      [userId],
+    );
+
+    if (admins.rows[0].total === 0) {
+      throw new ApiError(400, 'LAST_ADMIN_REQUIRED', 'At least one active admin account is required');
+    }
+  }
+
+  const result = await query(`
+    UPDATE app_users
+    SET active = $1,
+        suspension_reason = CASE WHEN $1 = TRUE THEN NULL ELSE COALESCE($2, suspension_reason, 'Platform access disabled by admin') END,
+        suspended_at = CASE WHEN $1 = TRUE THEN NULL ELSE NOW() END,
+        suspended_by_user_id = CASE WHEN $1 = TRUE THEN NULL ELSE $3::BIGINT END,
+        updated_at = NOW()
+    WHERE id = $4
+    RETURNING id, username, display_name, role, profile_id, wallet_address, active, suspension_reason, suspended_at, suspended_by_user_id
+  `, [
+    nextActive,
+    reason,
+    req.user.id,
+    userId,
+  ]);
 
   res.json({ data: sanitizeUser(result.rows[0]) });
 }));
 
-app.use('/api', authenticate);
+// Middleware to allow public read-only access to certain endpoints
+const authenticateIfNeeded = (req, res, next) => {
+  const publicPaths = ['/properties', '/profiles', '/transfers', '/ledger', '/blockchain'];
+  const isPublic = publicPaths.some(path => req.path.startsWith(path)) && req.method === 'GET';
+  
+  if (isPublic) {
+    return next();
+  }
+  
+  return authenticate(req, res, next);
+};
 
-app.get('/api/profiles', asyncHandler(async (req, res) => {
+app.use('/api', authenticateIfNeeded);
+
+app.get('/api/profiles', ensureProfileSchemaMiddleware, asyncHandler(async (req, res) => {
   const result = await query(`
     SELECT *
     FROM profiles
@@ -791,36 +1013,62 @@ app.get('/api/profiles', asyncHandler(async (req, res) => {
   res.json({ count: result.rowCount, data: result.rows });
 }));
 
-app.post('/api/profiles', asyncHandler(async (req, res) => {
-  const result = await query(`
-    INSERT INTO profiles (
-      backend_person_id,
-      backend_person_hash,
-      wallet_address,
-      full_name,
-      country,
-      identify_id,
-      email,
-      phone,
-      profile_data_hash,
-      verified,
-      registry_tx_hash
-    )
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-    RETURNING *
-  `, [
-    requireText(req.body, 'backend_person_id'),
-    requireText(req.body, 'backend_person_hash'),
-    requireText(req.body, 'wallet_address'),
-    requireText(req.body, 'full_name'),
-    requireText(req.body, 'country'),
-    requirePositiveNumber(req.body, 'identify_id'),
-    optionalText(req.body, 'email') || '',
-    requireText(req.body, 'phone'),
-    requireText(req.body, 'profile_data_hash'),
-    req.user.role === 'admin' && req.body.verified !== undefined ? parseBoolean(req.body.verified, 'verified') : false,
-    optionalText(req.body, 'registry_tx_hash'),
-  ]);
+app.post('/api/profiles', ensureProfileSchemaMiddleware, asyncHandler(async (req, res) => {
+  const walletAddress = normalizeWalletAddress(req.body.wallet_address);
+  const passwordHash = req.body.password ? await bcrypt.hash(requirePassword(req.body), 12) : null;
+
+  if (req.user.role !== 'admin' && !sameWallet(req.user.wallet_address, walletAddress)) {
+    throw new ApiError(403, 'FORBIDDEN', 'Users can only create a profile for their own login wallet');
+  }
+
+  const result = await withTransaction(async (client) => {
+    const inserted = await client.query(`
+      INSERT INTO profiles (
+        backend_person_id,
+        backend_person_hash,
+        wallet_address,
+        full_name,
+        country,
+        identify_id,
+        email,
+        phone,
+        address,
+        profile_data_hash,
+        verified,
+        registry_tx_hash
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+      RETURNING *
+    `, [
+      requireText(req.body, 'backend_person_id'),
+      requireText(req.body, 'backend_person_hash'),
+      walletAddress,
+      requireText(req.body, 'full_name'),
+      requireText(req.body, 'country'),
+      requirePositiveNumber(req.body, 'identify_id'),
+      optionalText(req.body, 'email') || '',
+      requireText(req.body, 'phone'),
+      optionalText(req.body, 'address') || '',
+      requireText(req.body, 'profile_data_hash'),
+      true,
+      optionalText(req.body, 'registry_tx_hash'),
+    ]);
+
+    if (sameWallet(req.user.wallet_address, walletAddress)) {
+      await client.query(
+        `
+          UPDATE app_users
+          SET profile_id = $1,
+              display_name = $2,
+              password_hash = COALESCE($3, password_hash)
+          WHERE id = $4
+        `,
+        [inserted.rows[0].id, requireText(req.body, 'full_name'), passwordHash, req.user.id],
+      );
+    }
+
+    return inserted;
+  });
 
   sendCreated(res, result.rows[0]);
 }));
@@ -845,7 +1093,36 @@ app.patch('/api/profiles/:id/verification', requireRoles('admin'), asyncHandler(
   res.json({ data: result.rows[0] });
 }));
 
-app.get('/api/properties', ensureIpfsSchemaMiddleware, asyncHandler(async (req, res) => {
+app.post('/api/profiles/:id/ekyc', authenticate, asyncHandler(async (req, res) => {
+  const profileId = parseId(req.params.id, 'id');
+  const result = await query('SELECT * FROM profiles WHERE id = $1', [profileId]);
+
+  if (result.rowCount === 0) {
+    throw new ApiError(404, 'PROFILE_NOT_FOUND', 'Profile not found');
+  }
+
+  const profile = result.rows[0];
+
+  // Only admin or the owner wallet may mark eKYC as complete for this profile
+  if (req.user.role !== 'admin') {
+    if (!req.user.wallet_address || !sameWallet(req.user.wallet_address, profile.wallet_address)) {
+      throw new ApiError(403, 'FORBIDDEN', 'Only admin or the profile owner may complete eKYC');
+    }
+  }
+
+  const updated = await query(`
+    UPDATE profiles
+    SET verified = TRUE,
+        registry_tx_hash = COALESCE($2, registry_tx_hash),
+        updated_at = NOW()
+    WHERE id = $1
+    RETURNING *
+  `, [profileId, optionalText(req.body, 'registry_tx_hash')]);
+
+  res.json({ data: updated.rows[0] });
+}));
+
+app.get('/api/properties', ensurePropertySchemaMiddleware, ensureIpfsSchemaMiddleware, asyncHandler(async (req, res) => {
   const result = await query(`
     SELECT
       p.*,
@@ -868,7 +1145,7 @@ app.get('/api/properties', ensureIpfsSchemaMiddleware, asyncHandler(async (req, 
   res.json({ count: result.rowCount, data: result.rows });
 }));
 
-app.post('/api/properties', requireRoles('admin'), asyncHandler(async (req, res) => {
+app.post('/api/properties', ensurePropertySchemaMiddleware, asyncHandler(async (req, res) => {
   const ownerProfileId = parseId(req.body.owner_profile_id, 'owner_profile_id');
 
   const result = await withTransaction(async (client) => {
@@ -879,6 +1156,10 @@ app.post('/api/properties', requireRoles('admin'), asyncHandler(async (req, res)
 
     if (owner.rowCount === 0) {
       throw new ApiError(404, 'OWNER_PROFILE_NOT_FOUND', 'Owner profile not found');
+    }
+
+    if (req.user.role !== 'admin' && !sameWallet(req.user.wallet_address, owner.rows[0].wallet_address)) {
+      throw new ApiError(403, 'FORBIDDEN', 'You can only create a property for your own wallet profile');
     }
 
     const inserted = await client.query(`
@@ -892,11 +1173,16 @@ app.post('/api/properties', requireRoles('admin'), asyncHandler(async (req, res)
         location,
         property_data_hash,
         legal_document_hash,
+        area_m2,
+        rooms,
+        valuation_report_hash,
+        valuation_report_uri,
         certificate_uri,
+        asking_price_wei,
         active,
         registry_tx_hash
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
       RETURNING *
     `, [
       requireText(req.body, 'backend_property_id'),
@@ -908,7 +1194,12 @@ app.post('/api/properties', requireRoles('admin'), asyncHandler(async (req, res)
       requireText(req.body, 'location'),
       requireText(req.body, 'property_data_hash'),
       requireText(req.body, 'legal_document_hash'),
+      optionalNonNegativeNumber(req.body, 'area_m2') || '0',
+      optionalNonNegativeNumber(req.body, 'rooms') || '0',
+      optionalText(req.body, 'valuation_report_hash') || '',
+      optionalText(req.body, 'valuation_report_uri') || '',
       requireText(req.body, 'certificate_uri'),
+      optionalNonNegativeNumber(req.body, 'asking_price_wei') || '0',
       req.body.active === undefined ? true : parseBoolean(req.body.active, 'active'),
       optionalText(req.body, 'registry_tx_hash'),
     ]);
@@ -919,26 +1210,181 @@ app.post('/api/properties', requireRoles('admin'), asyncHandler(async (req, res)
   sendCreated(res, result.rows[0]);
 }));
 
-app.patch('/api/properties/:id/blockchain', requireRoles('admin'), asyncHandler(async (req, res) => {
+app.patch('/api/properties/:id/blockchain', ensurePropertySchemaMiddleware, asyncHandler(async (req, res) => {
+  const id = parseId(req.params.id);
+
+  const result = await withTransaction(async (client) => {
+    const propertyResult = await client.query('SELECT * FROM property WHERE id = $1 FOR UPDATE', [id]);
+
+    if (propertyResult.rowCount === 0) {
+      throw new ApiError(404, 'PROPERTY_NOT_FOUND', 'Property not found');
+    }
+
+    const property = propertyResult.rows[0];
+    requirePropertyEditor(req, property);
+
+    const scPropertyId = optionalNonNegativeNumber(req.body, 'sc_property_id');
+    const certificateTokenId = optionalNonNegativeNumber(req.body, 'certificate_token_id');
+
+    const updated = await client.query(`
+      UPDATE property
+      SET sc_property_id = COALESCE($1, sc_property_id),
+          certificate_token_id = COALESCE($2, certificate_token_id),
+          registry_tx_hash = COALESCE($3, registry_tx_hash)
+      WHERE id = $4
+      RETURNING *
+    `, [
+      scPropertyId,
+      certificateTokenId,
+      optionalText(req.body, 'registry_tx_hash'),
+      id,
+    ]);
+
+    const hadOnChainRecord = property.sc_property_id !== null && property.certificate_token_id !== null;
+    const hasOnChainRecord = updated.rows[0].sc_property_id !== null && updated.rows[0].certificate_token_id !== null;
+
+    if (!hadOnChainRecord && hasOnChainRecord) {
+      await client.query(`
+        INSERT INTO property_ownership_history (
+          property_id,
+          sc_property_id,
+          certificate_token_id,
+          change_type,
+          to_profile_id,
+          to_wallet_address,
+          tx_hash
+        )
+        VALUES ($1, $2, $3, 'registered', $4, $5, $6)
+      `, [
+        updated.rows[0].id,
+        updated.rows[0].sc_property_id,
+        updated.rows[0].certificate_token_id,
+        updated.rows[0].owner_profile_id,
+        updated.rows[0].owner_wallet_address,
+        updated.rows[0].registry_tx_hash,
+      ]);
+    }
+
+    return updated;
+  });
+
+  res.json({ data: result.rows[0] });
+}));
+
+app.patch('/api/properties/:id/listing', ensurePropertySchemaMiddleware, asyncHandler(async (req, res) => {
+  const id = parseId(req.params.id);
+  const listingStatus = optionalText(req.body, 'listing_status') || 'listed';
+
+  if (!['unlisted', 'listed', 'sold', 'cancelled'].includes(listingStatus)) {
+    throw new ApiError(400, 'VALIDATION_ERROR', 'listing_status must be unlisted, listed, sold, or cancelled');
+  }
+
+  const result = await withTransaction(async (client) => {
+    const propertyResult = await client.query('SELECT * FROM property WHERE id = $1 FOR UPDATE', [id]);
+
+    if (propertyResult.rowCount === 0) {
+      throw new ApiError(404, 'PROPERTY_NOT_FOUND', 'Property not found');
+    }
+
+    const property = propertyResult.rows[0];
+    requirePropertyEditor(req, property);
+
+    if (!property.active && listingStatus === 'listed') {
+      throw new ApiError(400, 'PROPERTY_INACTIVE', 'Property is disabled and cannot be listed');
+    }
+
+    if (listingStatus === 'listed' && (property.sc_property_id === null || property.certificate_token_id === null)) {
+      throw new ApiError(400, 'PROPERTY_NOT_ON_CHAIN', 'Property must be minted before listing');
+    }
+
+    const askingPriceWei = optionalNonNegativeNumber(req.body, 'asking_price_wei');
+    const listingSaleId = optionalNonNegativeNumber(req.body, 'listing_sale_id');
+    const listingTxHash = optionalText(req.body, 'listing_tx_hash');
+
+    if (listingStatus === 'listed' && (!listingSaleId || !listingTxHash)) {
+      throw new ApiError(400, 'LISTING_TX_REQUIRED', 'listing_sale_id and listing_tx_hash are required when listing');
+    }
+
+    return client.query(`
+      UPDATE property
+      SET listing_status = $1,
+          listing_sale_id = COALESCE($2, listing_sale_id),
+          listing_tx_hash = COALESCE($3, listing_tx_hash),
+          asking_price_wei = COALESCE($4, asking_price_wei),
+          listed_at = CASE WHEN $1 = 'listed' THEN NOW() ELSE listed_at END,
+          sold_at = CASE WHEN $1 = 'sold' THEN NOW() WHEN $1 = 'listed' THEN NULL ELSE sold_at END,
+          updated_at = NOW()
+      WHERE id = $5
+      RETURNING *
+    `, [
+      listingStatus,
+      listingSaleId,
+      listingTxHash,
+      askingPriceWei,
+      id,
+    ]);
+  });
+
+  res.json({ data: result.rows[0] });
+}));
+
+app.patch('/api/properties/:id/risk', ensurePropertySchemaMiddleware, requireRoles('admin'), asyncHandler(async (req, res) => {
+  const id = parseId(req.params.id);
+  const nextActive = parseBoolean(req.body.active, 'active');
+  const reason = optionalText(req.body, 'reason') || optionalText(req.body, 'risk_reason');
+
+  if (!nextActive && !reason) {
+    throw new ApiError(400, 'RISK_REASON_REQUIRED', 'risk_reason is required when disabling an NFT/property');
+  }
+
   const result = await query(`
     UPDATE property
-    SET sc_property_id = COALESCE($1, sc_property_id),
-        certificate_token_id = COALESCE($2, certificate_token_id),
-        registry_tx_hash = COALESCE($3, registry_tx_hash)
+    SET active = $1,
+        risk_status = CASE WHEN $1 = TRUE THEN 'clear' ELSE 'blocked' END,
+        risk_reason = CASE WHEN $1 = TRUE THEN NULL ELSE $2 END,
+        risk_flagged_at = CASE WHEN $1 = TRUE THEN NULL ELSE NOW() END,
+        risk_flagged_by_user_id = CASE WHEN $1 = TRUE THEN NULL ELSE $3::BIGINT END,
+        listing_status = CASE WHEN $1 = FALSE AND listing_status = 'listed' THEN 'cancelled' ELSE listing_status END,
+        listed_at = CASE WHEN $1 = FALSE AND listing_status = 'listed' THEN NULL ELSE listed_at END,
+        updated_at = NOW()
     WHERE id = $4
     RETURNING *
   `, [
-    optionalNonNegativeNumber(req.body, 'sc_property_id'),
-    optionalNonNegativeNumber(req.body, 'certificate_token_id'),
-    optionalText(req.body, 'registry_tx_hash'),
-    parseId(req.params.id),
+    nextActive,
+    reason,
+    req.user.id,
+    id,
   ]);
 
   if (result.rowCount === 0) {
     throw new ApiError(404, 'PROPERTY_NOT_FOUND', 'Property not found');
   }
 
-  res.json({ data: result.rows[0] });
+  const property = result.rows[0];
+  let chainSync = {
+    attempted: false,
+    ok: null,
+  };
+
+  if (property.sc_property_id) {
+    try {
+      const registry = await getContract('registry', { write: true });
+      const tx = await registry.setPropertyActive(property.sc_property_id, nextActive);
+      chainSync = {
+        attempted: true,
+        ok: true,
+        ...await waitForTransaction(tx),
+      };
+    } catch (error) {
+      chainSync = {
+        attempted: true,
+        ok: false,
+        error: error.message,
+      };
+    }
+  }
+
+  res.json({ data: { ...property, chainSync } });
 }));
 
 
@@ -1079,7 +1525,7 @@ app.post('/api/properties/:id/metadata', ensureIpfsSchemaMiddleware, asyncHandle
   });
 }));
 
-app.get('/api/transfers', asyncHandler(async (req, res) => {
+app.get('/api/transfers', ensureTransferSchemaMiddleware, asyncHandler(async (req, res) => {
   const result = await query(`
     SELECT t.*, p.location, seller.full_name AS seller_full_name, buyer.full_name AS buyer_full_name
     FROM transfer_contract t
@@ -1093,7 +1539,7 @@ app.get('/api/transfers', asyncHandler(async (req, res) => {
   res.json({ count: result.rowCount, data: result.rows });
 }));
 
-app.get('/api/ledger/transfers', asyncHandler(async (req, res) => {
+app.get('/api/ledger/transfers', ensureTransferSchemaMiddleware, asyncHandler(async (req, res) => {
   const result = await query(`
     SELECT
       t.id,
@@ -1116,6 +1562,7 @@ app.get('/api/ledger/transfers', asyncHandler(async (req, res) => {
       t.deposit_tx_hash,
       t.release_tx_hash,
       t.cancel_tx_hash,
+      t.fee_wei,
       t.created_at,
       t.deposited_at,
       t.released_at,
@@ -1147,7 +1594,7 @@ app.get('/api/ledger/transfers', asyncHandler(async (req, res) => {
   res.json({ count: result.rowCount, data: result.rows });
 }));
 
-app.get('/api/ledger/ownership', asyncHandler(async (req, res) => {
+app.get('/api/ledger/ownership', ensurePropertySchemaMiddleware, asyncHandler(async (req, res) => {
   const result = await query(`
     SELECT
       p.id AS property_id,
@@ -1156,7 +1603,17 @@ app.get('/api/ledger/ownership', asyncHandler(async (req, res) => {
       p.certificate_token_id,
       p.location,
       p.certificate_uri,
+      p.asking_price_wei,
+      p.listing_status,
+      p.listing_sale_id,
+      p.listing_tx_hash,
+      p.listed_at,
+      p.sold_at,
       p.active,
+      p.risk_status,
+      p.risk_reason,
+      p.risk_flagged_at,
+      p.risk_flagged_by_user_id,
       p.owner_profile_id,
       owner.full_name AS owner_full_name,
       owner.wallet_address AS owner_wallet_address,
@@ -1188,7 +1645,7 @@ app.get('/api/ledger/ownership', asyncHandler(async (req, res) => {
   res.json({ count: result.rowCount, data: result.rows });
 }));
 
-app.post('/api/transfers', asyncHandler(async (req, res) => {
+app.post('/api/transfers', ensureTransferSchemaMiddleware, asyncHandler(async (req, res) => {
   const propertyId = parseId(req.body.property_id, 'property_id');
   const buyerProfileId = parseId(req.body.buyer_profile_id, 'buyer_profile_id');
 
@@ -1212,6 +1669,13 @@ app.post('/api/transfers', asyncHandler(async (req, res) => {
       throw new ApiError(400, 'PROPERTY_NOT_ON_CHAIN', 'Property must have sc_property_id and certificate_token_id first');
     }
 
+    const priceWei = requirePositiveNumber(req.body, 'price_wei');
+    const askingPriceWei = BigInt(property.asking_price_wei || 0);
+
+    if (askingPriceWei > 0n && BigInt(priceWei) !== askingPriceWei) {
+      throw new ApiError(400, 'PRICE_MISMATCH', 'Transfer price must match the seller asking price');
+    }
+
     const buyer = await client.query(
       'SELECT id, wallet_address FROM profiles WHERE id = $1',
       [buyerProfileId],
@@ -1219,6 +1683,10 @@ app.post('/api/transfers', asyncHandler(async (req, res) => {
 
     if (buyer.rowCount === 0) {
       throw new ApiError(404, 'BUYER_PROFILE_NOT_FOUND', 'Buyer profile not found');
+    }
+
+    if (req.user.role !== 'admin' && !sameWallet(req.user.wallet_address, buyer.rows[0].wallet_address)) {
+      throw new ApiError(403, 'FORBIDDEN', 'Only the buyer wallet can create this transfer request');
     }
 
     const inserted = await client.query(`
@@ -1250,7 +1718,7 @@ app.post('/api/transfers', asyncHandler(async (req, res) => {
       buyerProfileId,
       property.owner_wallet_address,
       buyer.rows[0].wallet_address,
-      requirePositiveNumber(req.body, 'price_wei'),
+      priceWei,
       requireText(req.body, 'document_hash'),
       optionalText(req.body, 'create_tx_hash'),
     ]);
@@ -1261,15 +1729,273 @@ app.post('/api/transfers', asyncHandler(async (req, res) => {
   sendCreated(res, result.rows[0]);
 }));
 
-app.patch('/api/transfers/:id/deposit', requireRoles('admin'), asyncHandler(async (req, res) => {
-  const result = await query(`
-    UPDATE transfer_contract
-    SET status = 'deposited',
-        deposit_tx_hash = COALESCE($1, deposit_tx_hash),
-        deposited_at = NOW()
-    WHERE id = $2 AND status = 'created'
-    RETURNING *
-  `, [optionalText(req.body, 'deposit_tx_hash'), parseId(req.params.id)]);
+app.post('/api/transfers/purchase', ensurePropertySchemaMiddleware, ensureTransferSchemaMiddleware, asyncHandler(async (req, res) => {
+  const propertyId = parseId(req.body.property_id, 'property_id');
+  const buyerProfileId = parseId(req.body.buyer_profile_id, 'buyer_profile_id');
+
+  const result = await withTransaction(async (client) => {
+    const propertyResult = await client.query('SELECT * FROM property WHERE id = $1 FOR UPDATE', [propertyId]);
+
+    if (propertyResult.rowCount === 0) {
+      throw new ApiError(404, 'PROPERTY_NOT_FOUND', 'Property not found');
+    }
+
+    const property = propertyResult.rows[0];
+
+    if (!property.active) {
+      throw new ApiError(400, 'PROPERTY_INACTIVE', 'Property is disabled and cannot be purchased');
+    }
+
+    if (property.listing_status !== 'listed') {
+      throw new ApiError(400, 'PROPERTY_NOT_LISTED', 'Property must be listed before purchase');
+    }
+
+    const buyer = await client.query(
+      'SELECT id, wallet_address FROM profiles WHERE id = $1',
+      [buyerProfileId],
+    );
+
+    if (buyer.rowCount === 0) {
+      throw new ApiError(404, 'BUYER_PROFILE_NOT_FOUND', 'Buyer profile not found');
+    }
+
+    if (req.user.role !== 'admin' && !sameWallet(req.user.wallet_address, buyer.rows[0].wallet_address)) {
+      throw new ApiError(403, 'FORBIDDEN', 'Only the buyer wallet can record this purchase');
+    }
+
+    const priceWei = requirePositiveNumber(req.body, 'price_wei');
+    const askingPriceWei = BigInt(property.asking_price_wei || 0);
+
+    if (askingPriceWei <= 0n) {
+      throw new ApiError(400, 'PRICE_NOT_LISTED', 'Listed property must have a positive asking price');
+    }
+
+    if (BigInt(priceWei) !== askingPriceWei) {
+      throw new ApiError(400, 'PRICE_MISMATCH', 'Purchase price must match the listing price');
+    }
+
+    const saleId = optionalNonNegativeNumber(req.body, 'sc_sale_id') || property.listing_sale_id;
+    const buyTxHash = requireText(req.body, 'buy_tx_hash');
+    const expectedFeeWei = ((BigInt(priceWei) * 100n) / 10000n).toString();
+    const feeWei = optionalNonNegativeNumber(req.body, 'fee_wei') || expectedFeeWei;
+    const backendTransactionId = optionalText(req.body, 'backend_transaction_id') || `BUY-${property.id}-${buyTxHash.slice(2, 12)}`;
+    const backendTransactionHash = optionalText(req.body, 'backend_transaction_hash') || buyTxHash;
+    const documentHash = optionalText(req.body, 'document_hash') || `BUY-DOC-${property.id}`;
+
+    if (!saleId || String(saleId) !== String(property.listing_sale_id)) {
+      throw new ApiError(400, 'SALE_ID_MISMATCH', 'Purchase saleId must match the active listing');
+    }
+
+    if (BigInt(feeWei) !== BigInt(expectedFeeWei)) {
+      throw new ApiError(400, 'FEE_MISMATCH', 'Purchase fee must be 1% of listing price');
+    }
+
+    const inserted = await client.query(`
+      INSERT INTO transfer_contract (
+        backend_transaction_id,
+        backend_transaction_hash,
+        sc_sale_id,
+        property_id,
+        sc_property_id,
+        certificate_token_id,
+        seller_profile_id,
+        buyer_profile_id,
+        seller_wallet_address,
+        buyer_wallet_address,
+        price_wei,
+        document_hash,
+        status,
+        create_tx_hash,
+        deposit_tx_hash,
+        release_tx_hash,
+        fee_wei,
+        deposited_at,
+        released_at
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'released', $13, $14, $15, $16, NOW(), NOW())
+      RETURNING *
+    `, [
+      backendTransactionId,
+      backendTransactionHash,
+      saleId,
+      property.id,
+      property.sc_property_id,
+      property.certificate_token_id,
+      property.owner_profile_id,
+      buyerProfileId,
+      property.owner_wallet_address,
+      buyer.rows[0].wallet_address,
+      priceWei,
+      documentHash,
+      property.listing_tx_hash,
+      property.listing_tx_hash,
+      buyTxHash,
+      feeWei,
+    ]);
+
+    await client.query(`
+      UPDATE property
+      SET owner_profile_id = $1,
+          owner_wallet_address = $2,
+          listing_status = 'sold',
+          sold_at = NOW(),
+          updated_at = NOW()
+      WHERE id = $3
+    `, [buyerProfileId, buyer.rows[0].wallet_address, property.id]);
+
+    await client.query(`
+      INSERT INTO property_ownership_history (
+        property_id,
+        sc_property_id,
+        certificate_token_id,
+        change_type,
+        from_profile_id,
+        to_profile_id,
+        from_wallet_address,
+        to_wallet_address,
+        blockchain_sale_id,
+        backend_transaction_id,
+        tx_hash
+      )
+      VALUES ($1, $2, $3, 'transferred', $4, $5, $6, $7, $8, $9, $10)
+    `, [
+      property.id,
+      property.sc_property_id,
+      property.certificate_token_id,
+      property.owner_profile_id,
+      buyerProfileId,
+      property.owner_wallet_address,
+      buyer.rows[0].wallet_address,
+      saleId,
+      backendTransactionId,
+      buyTxHash,
+    ]);
+
+    return inserted;
+  });
+
+  sendCreated(res, result.rows[0]);
+}));
+
+app.get('/api/transfers/:id/seller-message', ensureTransferSchemaMiddleware, asyncHandler(async (req, res) => {
+  const result = await query('SELECT * FROM transfer_contract WHERE id = $1', [parseId(req.params.id)]);
+
+  if (result.rowCount === 0) {
+    throw new ApiError(404, 'TRANSFER_NOT_FOUND', 'Transfer not found');
+  }
+
+  const transfer = result.rows[0];
+  requireSellerWallet(req, transfer.seller_wallet_address);
+
+  res.json({ data: { message: buildSellerAcceptanceMessage(transfer) } });
+}));
+
+app.patch('/api/transfers/:id/seller-signature', ensureTransferSchemaMiddleware, asyncHandler(async (req, res) => {
+  const id = parseId(req.params.id);
+  const signature = requireText(req.body, 'signature');
+
+  const result = await withTransaction(async (client) => {
+    const transferResult = await client.query('SELECT * FROM transfer_contract WHERE id = $1 FOR UPDATE', [id]);
+
+    if (transferResult.rowCount === 0) {
+      throw new ApiError(404, 'TRANSFER_NOT_FOUND', 'Transfer not found');
+    }
+
+    const transfer = transferResult.rows[0];
+    requireSellerWallet(req, transfer.seller_wallet_address);
+
+    if (transfer.status !== 'created') {
+      throw new ApiError(400, 'TRANSFER_NOT_SIGNABLE', 'Transfer must be in created status');
+    }
+
+    const message = buildSellerAcceptanceMessage(transfer);
+    const recovered = getAddress(verifyMessage(message, signature));
+
+    if (!sameWallet(recovered, transfer.seller_wallet_address)) {
+      throw new ApiError(401, 'INVALID_SELLER_SIGNATURE', 'Seller signature does not match the seller wallet');
+    }
+
+    return client.query(`
+      UPDATE transfer_contract
+      SET seller_acceptance_message = $1,
+          seller_signature = $2,
+          seller_signed_at = NOW()
+      WHERE id = $3
+      RETURNING *
+    `, [message, signature, id]);
+  });
+
+  res.json({ data: result.rows[0] });
+}));
+
+app.patch('/api/transfers/:id/sale', ensureTransferSchemaMiddleware, asyncHandler(async (req, res) => {
+  const id = parseId(req.params.id);
+
+  const result = await withTransaction(async (client) => {
+    const transferResult = await client.query('SELECT * FROM transfer_contract WHERE id = $1 FOR UPDATE', [id]);
+
+    if (transferResult.rowCount === 0) {
+      throw new ApiError(404, 'TRANSFER_NOT_FOUND', 'Transfer not found');
+    }
+
+    const transfer = transferResult.rows[0];
+    requireWalletParticipant(req, transfer.seller_wallet_address);
+
+    if (!transfer.seller_signature) {
+      throw new ApiError(400, 'SELLER_SIGNATURE_REQUIRED', 'Seller must sign the transfer acceptance first');
+    }
+
+    return client.query(`
+      UPDATE transfer_contract
+      SET sc_sale_id = COALESCE($1, sc_sale_id),
+          create_tx_hash = COALESCE($2, create_tx_hash)
+      WHERE id = $3 AND status = 'created'
+      RETURNING *
+    `, [
+      optionalNonNegativeNumber(req.body, 'sc_sale_id'),
+      optionalText(req.body, 'create_tx_hash'),
+      id,
+    ]);
+  });
+
+  if (result.rowCount === 0) {
+    throw new ApiError(400, 'TRANSFER_NOT_UPDATABLE', 'Transfer must be in created status');
+  }
+
+  res.json({ data: result.rows[0] });
+}));
+
+app.patch('/api/transfers/:id/deposit', ensureTransferSchemaMiddleware, asyncHandler(async (req, res) => {
+  const id = parseId(req.params.id);
+
+  const result = await withTransaction(async (client) => {
+    const transferResult = await client.query('SELECT * FROM transfer_contract WHERE id = $1 FOR UPDATE', [id]);
+
+    if (transferResult.rowCount === 0) {
+      throw new ApiError(404, 'TRANSFER_NOT_FOUND', 'Transfer not found');
+    }
+
+    const transfer = transferResult.rows[0];
+    requireWalletParticipant(req, transfer.seller_wallet_address);
+
+    if (!transfer.seller_signature) {
+      throw new ApiError(400, 'SELLER_SIGNATURE_REQUIRED', 'Seller must sign the transfer acceptance first');
+    }
+
+    return client.query(`
+      UPDATE transfer_contract
+      SET status = 'deposited',
+          deposit_tx_hash = COALESCE($1, deposit_tx_hash),
+          fee_wei = COALESCE($2, fee_wei),
+          deposited_at = NOW()
+      WHERE id = $3 AND status = 'created'
+      RETURNING *
+    `, [
+      optionalText(req.body, 'deposit_tx_hash'),
+      optionalNonNegativeNumber(req.body, 'fee_wei'),
+      id,
+    ]);
+  });
 
   if (result.rowCount === 0) {
     throw new ApiError(400, 'TRANSFER_NOT_DEPOSITABLE', 'Transfer must be in created status');
@@ -1278,7 +2004,7 @@ app.patch('/api/transfers/:id/deposit', requireRoles('admin'), asyncHandler(asyn
   res.json({ data: result.rows[0] });
 }));
 
-app.patch('/api/transfers/:id/release', requireRoles('admin'), asyncHandler(async (req, res) => {
+app.patch('/api/transfers/:id/release', ensureTransferSchemaMiddleware, asyncHandler(async (req, res) => {
   const id = parseId(req.params.id);
 
   const result = await withTransaction(async (client) => {
@@ -1292,6 +2018,7 @@ app.patch('/api/transfers/:id/release', requireRoles('admin'), asyncHandler(asyn
     }
 
     const transfer = transferResult.rows[0];
+    requireWalletParticipant(req, transfer.seller_wallet_address, transfer.buyer_wallet_address);
 
     if (transfer.status !== 'deposited') {
       throw new ApiError(400, 'TRANSFER_NOT_RELEASABLE', 'Transfer must be in deposited status');
@@ -1347,15 +2074,28 @@ app.patch('/api/transfers/:id/release', requireRoles('admin'), asyncHandler(asyn
   res.json({ data: result.rows[0] });
 }));
 
-app.patch('/api/transfers/:id/cancel', asyncHandler(async (req, res) => {
-  const result = await query(`
-    UPDATE transfer_contract
-    SET status = 'cancelled',
-        cancel_tx_hash = COALESCE($1, cancel_tx_hash),
-        cancelled_at = NOW()
-    WHERE id = $2 AND status IN ('created', 'deposited')
-    RETURNING *
-  `, [optionalText(req.body, 'cancel_tx_hash'), parseId(req.params.id)]);
+app.patch('/api/transfers/:id/cancel', ensureTransferSchemaMiddleware, asyncHandler(async (req, res) => {
+  const id = parseId(req.params.id);
+
+  const result = await withTransaction(async (client) => {
+    const transferResult = await client.query('SELECT * FROM transfer_contract WHERE id = $1 FOR UPDATE', [id]);
+
+    if (transferResult.rowCount === 0) {
+      throw new ApiError(404, 'TRANSFER_NOT_FOUND', 'Transfer not found');
+    }
+
+    const transfer = transferResult.rows[0];
+    requireWalletParticipant(req, transfer.seller_wallet_address, transfer.buyer_wallet_address);
+
+    return client.query(`
+      UPDATE transfer_contract
+      SET status = 'cancelled',
+          cancel_tx_hash = COALESCE($1, cancel_tx_hash),
+          cancelled_at = NOW()
+      WHERE id = $2 AND status IN ('created', 'deposited')
+      RETURNING *
+    `, [optionalText(req.body, 'cancel_tx_hash'), id]);
+  });
 
   if (result.rowCount === 0) {
     throw new ApiError(400, 'TRANSFER_NOT_CANCELLABLE', 'Transfer must be in created or deposited status');
@@ -1445,16 +2185,59 @@ app.get('/api/blockchain/escrow/sales/:saleId', asyncHandler(async (req, res) =>
   res.json({ data: serialize(sale) });
 }));
 
-app.post('/api/blockchain/registry/register-person', requireRoles('admin'), asyncHandler(async (req, res) => {
+app.post('/api/blockchain/registry/register-person', asyncHandler(async (req, res) => {
   const registry = await getContract('registry', { write: true });
-  const tx = await registry.RegisterPerson(
-    toBytes32(requireText(req.body, 'backend_person_id')),
-    requireText(req.body, 'wallet_address'),
-    toUint256FromHash(requireText(req.body, 'profile_data_hash')),
-    req.body.verified === undefined ? false : parseBoolean(req.body.verified, 'verified'),
-  );
-  const receipt = await waitForTransaction(tx);
-  res.status(201).json({ data: receipt });
+  const backendPersonIdText = requireText(req.body, 'backend_person_id');
+  const walletAddress = normalizeWalletAddress(req.body.wallet_address);
+
+  if (req.user.role !== 'admin' && !sameWallet(req.user.wallet_address, walletAddress)) {
+    throw new ApiError(403, 'FORBIDDEN', 'Users can only verify their own login wallet');
+  }
+
+  const backendPersonId = toBytes32(backendPersonIdText);
+  const zeroPersonId = `0x${'0'.repeat(64)}`;
+  let receipt;
+
+  const currentPersonId = await registry.personIdByWallet(walletAddress);
+
+  if (String(currentPersonId).toLowerCase() !== zeroPersonId) {
+    if (String(currentPersonId).toLowerCase() !== String(backendPersonId).toLowerCase()) {
+      throw new ApiError(409, 'WALLET_USED_ON_CHAIN', 'This wallet is already registered on-chain with another profile');
+    }
+
+    const alreadyVerified = await registry.isVerifiedWallet(walletAddress);
+
+    if (alreadyVerified) {
+      receipt = {
+        txHash: null,
+        blockNumber: null,
+        status: 1,
+        alreadyRegistered: true,
+        alreadyVerified: true,
+      };
+    } else {
+      const tx = await registry.setPersonVerified(backendPersonId, true);
+      receipt = await waitForTransaction(tx);
+    }
+  } else {
+    const tx = await registry.RegisterPerson(
+      backendPersonId,
+      walletAddress,
+      toUint256FromHash(requireText(req.body, 'profile_data_hash')),
+      true,
+    );
+    receipt = await waitForTransaction(tx);
+  }
+
+  await query(`
+    UPDATE profiles
+    SET verified = TRUE,
+        registry_tx_hash = COALESCE($1, registry_tx_hash)
+    WHERE backend_person_id = $2
+      AND LOWER(wallet_address) = LOWER($3)
+  `, [receipt.txHash, backendPersonIdText, walletAddress]);
+
+  res.status(201).json({ data: { ...receipt, verified: true } });
 }));
 
 app.post('/api/blockchain/registry/verify-person', requireRoles('admin'), asyncHandler(async (req, res) => {
@@ -1480,9 +2263,97 @@ app.post('/api/blockchain/registry/register-property', requireRoles('admin'), as
   res.status(201).json({ data: receipt });
 }));
 
-app.post('/api/blockchain/escrow/release', requireRoles('admin'), asyncHandler(async (req, res) => {
+// Cập nhật certificate_uri on-chain cho NFT đã mint (vd: sau khi tạo lại metadata với ảnh đúng).
+// Admin hoặc đúng owner hiện tại của property đều được phép yêu cầu hành động này (requirePropertyEditor).
+// Lưu ý: dù ai gọi API, transaction on-chain vẫn luôn được backend ký bằng ví admin (MANAGER_ROLE
+// trên PropertyRegistry) — nới quyền ở đây chỉ thay đổi ai được phép *yêu cầu*, không đổi ví ký giao dịch.
+app.patch('/api/properties/:id/certificate-uri', ensurePropertySchemaMiddleware, asyncHandler(async (req, res) => {
+  const id = parseId(req.params.id);
+  const certificateUri = requireText(req.body, 'certificate_uri');
+
+  const result = await withTransaction(async (client) => {
+    const propertyResult = await client.query('SELECT * FROM property WHERE id = $1 FOR UPDATE', [id]);
+
+    if (propertyResult.rowCount === 0) {
+      throw new ApiError(404, 'PROPERTY_NOT_FOUND', 'Property not found');
+    }
+
+    const property = propertyResult.rows[0];
+    requirePropertyEditor(req, property);
+
+    if (property.sc_property_id === null || property.sc_property_id === undefined) {
+      throw new ApiError(400, 'PROPERTY_NOT_ON_CHAIN', 'Property must be minted on-chain before updating certificate URI');
+    }
+
+    const registry = await getContract('registry', { write: true });
+    const tx = await registry.updateCertificateURI(property.sc_property_id, certificateUri);
+    const receipt = await waitForTransaction(tx);
+
+    const updated = await client.query(`
+      UPDATE property
+      SET certificate_uri = $1,
+          updated_at = NOW()
+      WHERE id = $2
+      RETURNING *
+    `, [certificateUri, id]);
+
+    return { property: updated.rows[0], receipt };
+  });
+
+  res.json({ data: result });
+}));
+
+app.post('/api/blockchain/escrow/release', requireRoles('admin'), ensureTransferSchemaMiddleware, asyncHandler(async (req, res) => {
+  const transferId = req.body.transfer_id === undefined || req.body.transfer_id === null || req.body.transfer_id === ''
+    ? null
+    : parseId(req.body.transfer_id, 'transfer_id');
+  const saleId = parseId(req.body.sale_id, 'sale_id');
+
+  if (transferId) {
+    const result = await query('SELECT * FROM transfer_contract WHERE id = $1', [transferId]);
+
+    if (result.rowCount === 0) {
+      throw new ApiError(404, 'TRANSFER_NOT_FOUND', 'Transfer not found');
+    }
+
+    const transfer = result.rows[0];
+    requireWalletParticipant(req, transfer.seller_wallet_address, transfer.buyer_wallet_address);
+
+    if (transfer.status !== 'deposited') {
+      throw new ApiError(400, 'TRANSFER_NOT_RELEASABLE', 'Transfer must be deposited before release');
+    }
+  }
+
   const escrow = await getContract('escrow', { write: true });
-  const tx = await escrow.releaseCertificateToBuyer(parseId(req.body.sale_id, 'sale_id'));
+  const tx = await escrow.releaseCertificateToBuyer(saleId);
+  res.json({ data: await waitForTransaction(tx) });
+}));
+
+app.post('/api/blockchain/escrow/cancel', ensureTransferSchemaMiddleware, asyncHandler(async (req, res) => {
+  const transferId = req.body.transfer_id === undefined || req.body.transfer_id === null || req.body.transfer_id === ''
+    ? null
+    : parseId(req.body.transfer_id, 'transfer_id');
+  const saleId = parseId(req.body.sale_id, 'sale_id');
+
+  if (transferId) {
+    const result = await query('SELECT * FROM transfer_contract WHERE id = $1', [transferId]);
+
+    if (result.rowCount === 0) {
+      throw new ApiError(404, 'TRANSFER_NOT_FOUND', 'Transfer not found');
+    }
+
+    const transfer = result.rows[0];
+    requireWalletParticipant(req, transfer.seller_wallet_address, transfer.buyer_wallet_address);
+
+    if (!['created', 'deposited'].includes(transfer.status)) {
+      throw new ApiError(400, 'TRANSFER_NOT_CANCELLABLE', 'Transfer must be created or deposited before cancel');
+    }
+  } else if (req.user.role !== 'admin') {
+    throw new ApiError(403, 'FORBIDDEN', 'transfer_id is required for non-admin cancel requests');
+  }
+
+  const escrow = await getContract('escrow', { write: true });
+  const tx = await escrow.cancelCertificateSale(saleId);
   res.json({ data: await waitForTransaction(tx) });
 }));
 

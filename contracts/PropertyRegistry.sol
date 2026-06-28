@@ -145,9 +145,13 @@ contract PropertyRegistry is AccessControl {
     address Wallet,
     uint256 datahash,
     bool verified
-) external onlyRole(MANAGER_ROLE) {
+) external {
     require(backendPersonId != bytes32(0), "PERSON_ID_REQUIRED");
     require(Wallet != address(0), "WALLET_REQUIRED");
+    if (!hasRole(MANAGER_ROLE, msg.sender)) {
+        require(msg.sender == Wallet, "ONLY_SELF_OR_MANAGER");
+        require(!verified, "SELF_CANNOT_VERIFY");
+    }
     //kiểm tra xem cá nhân đó có tồn tại theo ID backend
     require(persons[backendPersonId].backendPersonId == bytes32(0), "PERSON_EXISTS");
     //kiểm tra xem ví đã được dùng chưa
@@ -217,20 +221,31 @@ contract PropertyRegistry is AccessControl {
         bytes32 backendPersonId = personIdByWallet[wallet];
         return backendPersonId != bytes32(0) && persons[backendPersonId].verified;
     }
+
+    function isRegisteredWallet(address wallet) public view returns (bool) {
+        return personIdByWallet[wallet] != bytes32(0);
+    }
+
      //tạo function đăng ký tài sản
     function registerProperty(
     bytes32 backendPropertyId,
     address initialOwner,
-    bytes32 propertydataHash, // Corrected parameter name
+    bytes32 propertydataHash,
     bytes32 legalDocumentHash,
     string calldata location,
     string calldata certificateURI
     //returns.. trả về 2 giá trị lưu trữ vào backend
-) external onlyRole(MANAGER_ROLE) returns (uint256 propertyId, uint256 tokenId) {
+) external returns (uint256 propertyId, uint256 tokenId) {
     require(backendPropertyId != bytes32(0), "PROPERTY_ID_REQUIRED");
     require(propertyIdByBackend[backendPropertyId] == 0, "PROPERTY_EXISTS");
-    //yêu cầu từ function đọc dữ liệu cho be và fe khi kiểm tra người sở hữu ví ban đầu
-    require(isVerifiedWallet(initialOwner), "OWNER_NOT_VERIFIED");
+    require(initialOwner != address(0), "OWNER_REQUIRED");
+    require(
+        hasRole(MANAGER_ROLE, msg.sender) || msg.sender == initialOwner,
+        "ONLY_MANAGER_OR_OWNER"
+    );
+    //Cho user tự mint sau khi ví đã có hồ sơ on-chain. 
+    //Manager vẫn có thể mint thay trong demo/quản trị.
+    require(isRegisteredWallet(initialOwner), "OWNER_NOT_REGISTERED");
     require(bytes(location).length > 0, "LOCATION_REQUIRED");
     require(bytes(certificateURI).length > 0, "CERTIFICATE_URI_REQUIRED");
     //value là tokenId=propertyId mới=propertyId cũ+1
@@ -308,7 +323,7 @@ contract PropertyRegistry is AccessControl {
         uint256 propertyId,
         address newOwner
     ) external onlyRole(ESCROW_ROLE) propertyExists(propertyId) {
-        require(isVerifiedWallet(newOwner), "NEW_OWNER_NOT_VERIFIED");
+        require(isRegisteredWallet(newOwner), "NEW_OWNER_NOT_REGISTERED");
 
         Property storage target = properties[propertyId];
         require(target.active, "PROPERTY_INACTIVE");

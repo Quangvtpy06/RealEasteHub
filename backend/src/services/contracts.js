@@ -142,6 +142,16 @@ async function waitForTransaction(tx) {
 async function getRuntimeConfig() {
   const provider = process.env.RPC_URL ? getProvider() : null;
   const network = provider ? await provider.getNetwork() : null;
+  let feeRecipient = null;
+
+  if (provider && process.env.ESCROW_ADDRESS) {
+    try {
+      const escrow = new ethers.Contract(process.env.ESCROW_ADDRESS, loadAbi('escrow'), provider);
+      feeRecipient = await escrow.feeRecipient();
+    } catch (error) {
+      feeRecipient = null;
+    }
+  }
 
   return {
     rpcConfigured: Boolean(process.env.RPC_URL),
@@ -152,6 +162,7 @@ async function getRuntimeConfig() {
       registry: process.env.REGISTRY_ADDRESS || null,
       escrow: process.env.ESCROW_ADDRESS || null,
     },
+    feeRecipient,
   };
 }
 

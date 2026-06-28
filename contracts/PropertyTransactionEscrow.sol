@@ -1,35 +1,33 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
-//import các kiểu dữ liệu từ contracts khác vào
+
 import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
 import {IERC721} from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
-import {ERC721Holder} from "@openzeppelin/contracts/token/ERC721/utils/ERC721Holder.sol";
-/*ReentrancyGuard của openzeppelin dùng để ngăn chặn việc tái nhập hàm
-    đơn giản là nó có modifer nonReentrant khóa trạng thái rồi mói cho phép run function
-    sau khi chạy toàn bộ logic bên trong thì nó mở khóa, việc này dành cho các thao tác nhạy cảm như:
-    rút tiền, chuyển khoản token, giao dịch NFT
-nguồn: https://docs.openzeppelin.com/contracts/5.x/api/utils#reentrancyguard
-*/
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {PropertyRegistry} from "./PropertyRegistry.sol";
 
-/*contract này chỉ xử lý quy trình mua bán trọn NFT giấy chứng nhận qua trung gian hệ thống.
-@notice smartcontract này chỉ lưu trạng thái xác thực và chuyển NFT.*/
-contract PropertyTransactionEscrow is AccessControl, ERC721Holder, ReentrancyGuard {
+/// @notice Marketplace escrow for listed property certificate NFTs.
+/// Seller lists by approving this contract, while the NFT stays in the seller wallet.
+/// Buyer pays seller price plus platform fee, then the contract atomically sends
+/// NFT to buyer, fee to admin, and proceeds to seller.
+contract PropertyTransactionEscrow is AccessControl, ReentrancyGuard {
     bytes32 public constant MANAGER_ROLE = keccak256("MANAGER_ROLE");
-    //khai báo các biến
+
     PropertyRegistry public immutable propertyRegistry;
     IERC721 public immutable certificateNFT;
-    uint256 public nextSaleId = 1; //saleId bắt đầu từ 1
-    //khai báo danh sách trạng thái của hồ sơ
+    address payable public feeRecipient;
+
+    uint256 public constant FEE_BPS = 100; // 1%
+    uint256 public constant BPS_DENOMINATOR = 10_000;
+    uint256 public nextSaleId = 1;
+
     enum SaleStatus {
         None,
-        Created,
-        Deposited,
-        Released,
+        Listed,
+        Sold,
         Cancelled
     }
-    //tạo struct hồ sơ giao dịch
+
     struct CertificateSale {
         uint256 id;
         uint256 propertyId;
@@ -46,191 +44,252 @@ contract PropertyTransactionEscrow is AccessControl, ERC721Holder, ReentrancyGua
         uint256 cancelledAt;
         address releasedBy;
     }
-    //mapping CertificateSale để tra cứu dữ liệu từng giao dịch
-    mapping(uint256 => CertificateSale) private certificateSales; //chi tiết lưu vào certificateSales
-    mapping(uint256 => uint256) public activeSaleByProperty; //giao dịch đang active
-    mapping(uint256 => uint256[]) private saleIdsByProperty; //Id property giao dịch
-    mapping(bytes32 => uint256) public saleIdByBackendTransactionId; //lấy Id backend của giao dịch
 
-    //tạo event cho hồ sơ giao dịch được tạo ra
+    mapping(uint256 => CertificateSale) private certificateSales;
+    mapping(uint256 => uint256) public activeSaleByProperty;
+    mapping(uint256 => uint256[]) private saleIdsByProperty;
+    mapping(bytes32 => uint256) public saleIdByBackendTransactionId;
+    mapping(uint256 => uint256) public saleFeeWei;
+
     event CertificateSaleCreated(
-        uint256 indexed saleId, //indexed để lọc nhanh hơn và chỉ tối đa 3 indexed 1 event
+        uint256 indexed saleId,
         uint256 indexed propertyId,
         address indexed seller,
         address buyer,
         uint256 priceWei,
         bytes32 backendTransactionId
     );
-    //tạo event hồ sơ giao dịch được gửi vào Escrow
+
+    event CertificateListed(
+        uint256 indexed saleId,
+        uint256 indexed propertyId,
+        uint256 indexed certificateTokenId,
+        address seller,
+        uint256 priceWei
+    );
+
+    event CertificatePurchased(
+        uint256 indexed saleId,
+        uint256 indexed propertyId,
+        uint256 indexed certificateTokenId,
+        address seller,
+        address buyer,
+        uint256 priceWei,
+        uint256 feeWei,
+        uint256 sellerProceedsWei
+    );
+
     event CertificateDeposited(
         uint256 indexed saleId,
-        uint256 indexed propertyId, 
-        address indexed seller
+        uint256 indexed propertyId,
+        address indexed seller,
+        uint256 feeWei
     );
-    //tạo hồ sơ giao dịch được xác nhận
+
     event CertificateReleased(
         uint256 indexed saleId,
         uint256 indexed propertyId,
         address indexed buyer,
         address releasedBy
     );
-    //tạo hồ sơ giao dịch đã hủy
+
     event CertificateSaleCancelled(
-        uint256 indexed saleId, 
+        uint256 indexed saleId,
         uint256 indexed propertyId
-        );
-    //kiểm tra xem hồ sơ giao dịch có tồn tại chưa
+    );
+
     modifier saleExists(uint256 saleId) {
         require(certificateSales[saleId].id != 0, "SALE_NOT_FOUND");
         _;
     }
-    //tạo constructor truyền địa chỉ admin, địa chỉ đăng ký và địa chỉ NFT vào
+
     constructor(address admin, address registryAddress, address nftAddress) {
         require(admin != address(0), "ADMIN_REQUIRED");
         require(registryAddress != address(0), "REGISTRY_REQUIRED");
         require(nftAddress != address(0), "NFT_REQUIRED");
-        //cho phép contract hiện tại gọi 2 contract bên dưới
+
         propertyRegistry = PropertyRegistry(registryAddress);
         certificateNFT = IERC721(nftAddress);
-        //cấp quyền admin cao nhất 
+        feeRecipient = payable(admin);
+
         _grantRole(DEFAULT_ADMIN_ROLE, admin);
         _grantRole(MANAGER_ROLE, admin);
     }
 
-    /*Tạo hồ sơ cho yêu cầu chuyển nhượng từ seller --> buyer
-    backendTransactionId là hash giao dichj trong Postgres ở backend*/
-    //function tạo hồ sơ chuyển nhượng
+    function getTransactionFee(uint256 priceWei) public pure returns (uint256) {
+        return (priceWei * FEE_BPS) / BPS_DENOMINATOR;
+    }
+
+    function getTotalPrice(uint256 priceWei) public pure returns (uint256) {
+        return priceWei + getTransactionFee(priceWei);
+    }
+
+    function setFeeRecipient(address payable newFeeRecipient) external onlyRole(MANAGER_ROLE) {
+        require(newFeeRecipient != address(0), "FEE_RECIPIENT_REQUIRED");
+        feeRecipient = newFeeRecipient;
+    }
+
+    function _isEscrowApproved(address seller, uint256 tokenId) private view returns (bool) {
+        return certificateNFT.getApproved(tokenId) == address(this)
+            || certificateNFT.isApprovedForAll(seller, address(this));
+    }
+
+    function listCertificate(
+        uint256 propertyId,
+        uint256 priceWei,
+        bytes32 backendTransactionId,
+        bytes32 documentHash
+    ) external nonReentrant returns (uint256 saleId) {
+        return _listCertificate(propertyId, address(0), priceWei, backendTransactionId, documentHash);
+    }
+
     function createCertificateSale(
         uint256 propertyId,
         address buyer,
         uint256 priceWei,
         bytes32 backendTransactionId,
         bytes32 documentHash
-    ) external nonReentrant returns (uint256 saleId) /*trả về saleId khi call*/{
-        require(buyer != address(0), "BUYER_REQUIRED"); //chỉ người mua 
+    ) external nonReentrant returns (uint256 saleId) {
         require(buyer != msg.sender, "BUYER_EQUALS_SELLER");
+        if (buyer != address(0)) {
+            require(propertyRegistry.isRegisteredWallet(buyer), "BUYER_NOT_REGISTERED");
+        }
+        return _listCertificate(propertyId, buyer, priceWei, backendTransactionId, documentHash);
+    }
+
+    function _listCertificate(
+        uint256 propertyId,
+        address reservedBuyer,
+        uint256 priceWei,
+        bytes32 backendTransactionId,
+        bytes32 documentHash
+    ) private returns (uint256 saleId) {
+        require(priceWei > 0, "PRICE_REQUIRED");
         require(backendTransactionId != bytes32(0), "BACKEND_TX_REQUIRED");
         require(saleIdByBackendTransactionId[backendTransactionId] == 0, "BACKEND_TX_EXISTS");
         require(propertyRegistry.isPropertyActive(propertyId), "PROPERTY_INACTIVE");
         require(propertyRegistry.verifyOwnership(propertyId, msg.sender), "ONLY_PROPERTY_OWNER");
-        require(propertyRegistry.isVerifiedWallet(buyer), "BUYER_NOT_VERIFIED");
         require(activeSaleByProperty[propertyId] == 0, "ACTIVE_SALE_EXISTS");
-        //tokenId của NFT lấy từ propertyId của contract PropertyRegistry.sol
+
         uint256 tokenId = propertyRegistry.getCertificateTokenId(propertyId);
-        //kiểm tra có phải NFT của người chuyển nhượng không
         require(certificateNFT.ownerOf(tokenId) == msg.sender, "SELLER_NOT_NFT_HOLDER");
-        //danh sách hồ sơ tăng dần từ 1
+
         saleId = nextSaleId++;
-        //tạo 1 giao dịch mới lưu vào smartcontract với các biến sau
         certificateSales[saleId] = CertificateSale({
             id: saleId,
             propertyId: propertyId,
             certificateTokenId: tokenId,
             seller: msg.sender,
-            buyer: buyer,
+            buyer: reservedBuyer,
             priceWei: priceWei,
             backendTransactionId: backendTransactionId,
             documentHash: documentHash,
-            status: SaleStatus.Created,
+            status: SaleStatus.Listed,
             createdAt: block.timestamp,
-            depositedAt: 0, //khi chưa xảy ra thì thời điểm để rỗng
+            depositedAt: 0,
             releasedAt: 0,
             cancelledAt: 0,
             releasedBy: address(0)
         });
 
-        //lưu lại hồ sơ đang active, lịch sử mở và liên kết đến backend        
         activeSaleByProperty[propertyId] = saleId;
         saleIdsByProperty[propertyId].push(saleId);
         saleIdByBackendTransactionId[backendTransactionId] = saleId;
-        //call ra các biến từ event tạo hồ sơ
-        emit CertificateSaleCreated(saleId, propertyId, msg.sender, buyer, priceWei, backendTransactionId);
+
+        require(_isEscrowApproved(msg.sender, tokenId), "NFT_NOT_APPROVED");
+
+        emit CertificateSaleCreated(saleId, propertyId, msg.sender, reservedBuyer, priceWei, backendTransactionId);
+        emit CertificateListed(saleId, propertyId, tokenId, msg.sender, priceWei);
     }
 
-    //function chuyển NFT vào Escrow sau đó đợi approve
-    function depositCertificate(
-        uint256 saleId
-    ) external nonReentrant saleExists(saleId) {
-        //lấy saleId từ mapping certificateSales
+    function buyCertificate(uint256 saleId) external payable nonReentrant saleExists(saleId) {
         CertificateSale storage sale = certificateSales[saleId];
-        require(sale.status == SaleStatus.Created, 
-            "SALE_NOT_CREATED"
-        ); //kiểm tra hồ sơ có chưa
-        require(msg.sender == sale.seller, "ONLY_SELLER"); //chỉ cho người bán gửi
-        require(certificateNFT.ownerOf(sale.certificateTokenId) == sale.seller, 
-            "SELLER_NOT_NFT_HOLDER"
-        );
-        //lấy hàm từ contract CertificateNFT.sol để chuyển hàm từ ERC721 vào Escrow
-        certificateNFT.safeTransferFrom(sale.seller, address(this), sale.certificateTokenId);
+        require(sale.status == SaleStatus.Listed, "SALE_NOT_LISTED");
+        require(msg.sender != sale.seller, "BUYER_EQUALS_SELLER");
+        require(sale.buyer == address(0) || sale.buyer == msg.sender, "BUYER_NOT_ALLOWED");
+        require(propertyRegistry.isRegisteredWallet(msg.sender), "BUYER_NOT_REGISTERED");
+        require(propertyRegistry.verifyOwnership(sale.propertyId, sale.seller), "SELLER_NOT_PROPERTY_OWNER");
+        require(certificateNFT.ownerOf(sale.certificateTokenId) == sale.seller, "SELLER_NOT_NFT_HOLDER");
+        require(_isEscrowApproved(sale.seller, sale.certificateTokenId), "NFT_NOT_APPROVED");
 
-        sale.status = SaleStatus.Deposited;
-        sale.depositedAt = block.timestamp;
-        //call ra các biến từ event chuyển NFT vào Escrow
-        emit CertificateDeposited(saleId, sale.propertyId, sale.seller);
-    }
-    //function xác nhận hồ sơ chuyển nhượng xong thì release NFT cho buyer
-    function releaseCertificateToBuyer(
-        uint256 saleId
-    ) external onlyRole(MANAGER_ROLE)/*Chỉ cho admin call*/ 
-    nonReentrant saleExists(saleId) {
-        CertificateSale storage sale = certificateSales[saleId];
-        require(sale.status == SaleStatus.Deposited, "SALE_NOT_DEPOSITED");
-        require(certificateNFT.ownerOf(sale.certificateTokenId) == address(this), 
-            "NFT_NOT_IN_ESCROW"
-        );
+        uint256 feeWei = getTransactionFee(sale.priceWei);
+        uint256 totalPriceWei = sale.priceWei + feeWei;
+        require(msg.value >= totalPriceWei, "INSUFFICIENT_PAYMENT");
 
-        sale.status = SaleStatus.Released;
+        uint256 sellerProceedsWei = sale.priceWei;
+        uint256 refundWei = msg.value - totalPriceWei;
+
+        sale.buyer = msg.sender;
+        sale.status = SaleStatus.Sold;
         sale.releasedAt = block.timestamp;
         sale.releasedBy = msg.sender;
+        saleFeeWei[saleId] = feeWei;
         activeSaleByProperty[sale.propertyId] = 0;
-        //lấy hàm từ 2 contract đúc NFT vào đăng ký property
-        certificateNFT.safeTransferFrom(address(this), sale.buyer, sale.certificateTokenId);
-        propertyRegistry.updateOwnerFromEscrow(sale.propertyId, sale.buyer);
-        //call ra event sau
-        emit CertificateReleased(saleId, sale.propertyId, sale.buyer, msg.sender);
-    }
-    /*function xóa hồ sơ nếu seller hoặc admin hủy 
-    @notice NẾU NFT ĐÃ VÀO ESCROW THÌ HOÀN LẠI BUYER*/
-    function cancelCertificateSale(
-        uint256 saleId
-    ) external nonReentrant saleExists(saleId) {
-        CertificateSale storage sale = certificateSales[saleId];
-        //Không thể hủy giao dịch nếu giao dịch chưa tạo hoặc chưa gửi vào Escrow
-        require(
-            sale.status == SaleStatus.Created || sale.status == SaleStatus.Deposited,
-            "SALE_CANNOT_BE_CANCELLED"
-        );
-        require(msg.sender == sale.seller || hasRole(MANAGER_ROLE, msg.sender), 
-            "ONLY_SELLER_OR_MANAGER"
-        );
-        //Nếu NFT đã có trong Escrow thì sẽ hoàn lại buyer
-        if (sale.status == SaleStatus.Deposited) {
-            require(certificateNFT.ownerOf(sale.certificateTokenId) == address(this), 
-                "NFT_NOT_IN_ESCROW"
-            );
-            certificateNFT.safeTransferFrom(
-                address(this), 
-                sale.seller, 
-                sale.certificateTokenId
-            );
+
+        certificateNFT.safeTransferFrom(sale.seller, msg.sender, sale.certificateTokenId);
+        propertyRegistry.updateOwnerFromEscrow(sale.propertyId, msg.sender);
+
+        if (feeWei > 0) {
+            (bool sentFee, ) = feeRecipient.call{value: feeWei}("");
+            require(sentFee, "FEE_TRANSFER_FAILED");
         }
-        //cập nhật các thông tin sau khi cancelled
+
+        (bool sentSeller, ) = payable(sale.seller).call{value: sellerProceedsWei}("");
+        require(sentSeller, "SELLER_PAYMENT_FAILED");
+
+        if (refundWei > 0) {
+            (bool refunded, ) = payable(msg.sender).call{value: refundWei}("");
+            require(refunded, "PAYMENT_REFUND_FAILED");
+        }
+
+        emit CertificatePurchased(
+            saleId,
+            sale.propertyId,
+            sale.certificateTokenId,
+            sale.seller,
+            msg.sender,
+            sale.priceWei,
+            feeWei,
+            sellerProceedsWei
+        );
+        emit CertificateReleased(saleId, sale.propertyId, msg.sender, msg.sender);
+    }
+
+    function depositCertificate(uint256 saleId) external payable nonReentrant saleExists(saleId) {
+        CertificateSale memory sale = certificateSales[saleId];
+        require(sale.status == SaleStatus.Listed, "SALE_NOT_LISTED");
+        require(msg.sender == sale.seller, "ONLY_SELLER");
+        require(msg.value == 0, "NO_FEE_ON_LISTING");
+        require(certificateNFT.ownerOf(sale.certificateTokenId) == sale.seller, "SELLER_NOT_NFT_HOLDER");
+        require(_isEscrowApproved(sale.seller, sale.certificateTokenId), "NFT_NOT_APPROVED");
+    }
+
+    function releaseCertificateToBuyer(uint256 saleId)
+        external
+        onlyRole(MANAGER_ROLE)
+        nonReentrant
+        saleExists(saleId)
+    {
+        revert("USE_BUY_CERTIFICATE");
+    }
+
+    function cancelCertificateSale(uint256 saleId) external nonReentrant saleExists(saleId) {
+        CertificateSale storage sale = certificateSales[saleId];
+        require(sale.status == SaleStatus.Listed, "SALE_CANNOT_BE_CANCELLED");
+        require(msg.sender == sale.seller || hasRole(MANAGER_ROLE, msg.sender), "ONLY_SELLER_OR_MANAGER");
+
         sale.status = SaleStatus.Cancelled;
         sale.cancelledAt = block.timestamp;
         activeSaleByProperty[sale.propertyId] = 0;
-        //call ra event hủy hồ sơ
+
         emit CertificateSaleCancelled(saleId, sale.propertyId);
     }
-    //function lấy Id hợp đồng giao dịch, chỉ đọc lịch sử các giao dịch và trả về
-    function getCertificateSale(
-        uint256 saleId
-    ) external view saleExists(saleId) returns (CertificateSale memory) {
+
+    function getCertificateSale(uint256 saleId) external view saleExists(saleId) returns (CertificateSale memory) {
         return certificateSales[saleId];
     }
-    //function lấy Id property, chỉ đọc lịch sử property giao dịch và trả về
-    function getSalesByProperty(
-        uint256 propertyId
-    ) external view returns (uint256[] memory) {
+
+    function getSalesByProperty(uint256 propertyId) external view returns (uint256[] memory) {
         return saleIdsByProperty[propertyId];
     }
 }
